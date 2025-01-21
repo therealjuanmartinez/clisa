@@ -14,7 +14,7 @@ install_requires = [
     'stringcase==1.2.0',
     'webvtt-py',
     'PyYAML>=6.0.1',
-    'jsonschema==3.2.0',
+    'jsonschema>=3.2.0',
     'watchdog==6.0.0',
     'gpt-cli',
     'rich',
