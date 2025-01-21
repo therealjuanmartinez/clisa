@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 # Regular PyPI dependencies
 install_requires = [
-    'attrs>=24.2.0',
+    'attrs',
     'beautifulsoup4>=4.11.1',
     'colorama>=0.4.4',
     'Pillow==10.4.0',
