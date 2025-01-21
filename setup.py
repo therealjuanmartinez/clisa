@@ -2,15 +2,15 @@ from setuptools import setup, find_packages
 
 # Regular PyPI dependencies
 install_requires = [
-    'attrs==24.2.0',
-    'beautifulsoup4==4.11.1',
-    'colorama==0.4.4',
+    'attrs>=24.2.0',
+    'beautifulsoup4>=4.11.1',
+    'colorama>=0.4.4',
     'Pillow==10.4.0',
-    'argparse==1.4.0',
-    'platformdirs==4.3.6',
-    'regex==2022.9.13',
-    'readchar==4.2.0',
-    'requests==2.32.3',
+    'argparse>=1.4.0',
+    'platformdirs>=4.3.6',
+    'regex>=2022.9.13',
+    'readchar>=4.2.0',
+    'requests>=2.32.3',
     'stringcase==1.2.0',
     'webvtt-py',
     'PyYAML>=6.0.1',
