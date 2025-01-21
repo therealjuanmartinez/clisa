@@ -17,7 +17,8 @@ install_requires = [
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
     'gpt-command-line',
-    'rich'
+    'rich',
+    'openai==1.42.0'
 ]
 
 # Git dependencies
