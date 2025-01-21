@@ -16,25 +16,27 @@ install_requires = [
     'PyYAML==6.0.2',
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
-    'gptcli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main#egg=gptcli',
-    'rich @ git+https://github.com/therealjuanmartinez/rich.git@master'
+    'gpt-command-line',
+    'rich'
+]
+
+# Git dependencies
+dependency_links = [
+    'git+https://github.com/therealjuanmartinez/gpt-cli.git@main#egg=gpt-command-line-0.3.0',
+    'git+https://github.com/therealjuanmartinez/rich.git@master#egg=rich-13.9.4'
 ]
 
 setup(
     name="clisa",
     version="0.1.0",
     packages=find_packages(),
-    package_data={
-        'clisa': [
-            'tools/*.txt',
-            'tools/roles/*',
-            'tools/*.py',
-            'colon_tools/*.py'
-        ]
-    },
-    include_package_data=True,
     install_requires=install_requires,
-    scripts=['bin/clisa'],
+    dependency_links=dependency_links,
+    entry_points={
+        'console_scripts': [
+            'clisa=clisa.ai:main',
+        ],
+    },
     python_requires='>=3.6',
     author="Juan",
     description="A CLI AI assistant",
