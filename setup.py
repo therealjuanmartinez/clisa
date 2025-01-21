@@ -19,7 +19,6 @@ install_requires = [
     'gpt-cli',
     'rich',
     'tiktoken',
-   # 'openai==1.42.0'
     'openai==1.55.3',
     'httpx==0.27.2'
 ]
