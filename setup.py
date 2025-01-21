@@ -16,15 +16,12 @@ install_requires = [
     'PyYAML==6.0.2',
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
-    'gpt-cli',
-    'rich'
+    'rich @ git+https://github.com/therealjuanmartinez/rich.git@master',
+    'gpt-cli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main'
 ]
 
-# Git dependencies
-dependency_links = [
-    'git+https://github.com/therealjuanmartinez/gpt-cli.git@main#egg=gpt-cli-0.1.0',
-    'git+https://github.com/therealjuanmartinez/rich.git@master#egg=rich-0.1.0'
-]
+# Git dependencies are now included directly in install_requires
+dependency_links = []
 
 setup(
     name="clisa",
