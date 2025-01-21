@@ -30,6 +30,15 @@ setup(
     name="clisa",
     version="0.1.0",
     packages=find_packages(),
+    package_data={
+        'clisa': [
+            'tools/*.txt',
+            'tools/roles/*',
+            'tools/*.py',
+            'colon_tools/*.py'
+        ]
+    },
+    include_package_data=True,
     install_requires=install_requires,
     dependency_links=dependency_links,
     scripts=['bin/clisa'],
