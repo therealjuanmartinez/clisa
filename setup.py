@@ -13,7 +13,7 @@ install_requires = [
     'requests==2.32.3',
     'stringcase==1.2.0',
     'webvtt-py',
-    'PyYAML>=6.0.2',
+    'PyYAML>=6.0.1',
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
     'gpt-cli',
