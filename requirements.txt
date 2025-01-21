@@ -1,6 +1,6 @@
 attrs==24.2.0
 git+https://github.com/therealjuanmartinez/gpt-cli.git@main
-git+https://github.com/therealjuanmartinez/rich.git@main
+git+https://github.com/therealjuanmartinez/rich.git@master
 beautifulsoup4==4.11.1
 colorama==0.4.4
 Pillow==10.4.0
