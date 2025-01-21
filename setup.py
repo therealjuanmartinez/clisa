@@ -32,11 +32,7 @@ setup(
     packages=find_packages(),
     install_requires=install_requires,
     dependency_links=dependency_links,
-    entry_points={
-        'console_scripts': [
-            'clisa=clisa.ai:main',
-        ],
-    },
+    scripts=['bin/clisa'],
     python_requires='>=3.6',
     author="Juan",
     description="A CLI AI assistant",
