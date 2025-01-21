@@ -18,7 +18,7 @@ install_requires = [
     'watchdog==6.0.0',
     'rich',
     'tiktoken',
-    'openai==1.55.3',
+    'openai>=1.54.5',
     'httpx==0.27.2'
 ]
 
