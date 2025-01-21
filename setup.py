@@ -16,7 +16,7 @@ install_requires = [
     'PyYAML==6.0.2',
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
-    'gpt-cli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main',
+    'gptcli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main',
     'rich @ git+https://github.com/therealjuanmartinez/rich.git@master'
 ]
 
