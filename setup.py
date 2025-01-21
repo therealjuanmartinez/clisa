@@ -17,7 +17,7 @@ install_requires = [
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
     'gpt-cli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main',
-    'rich @ git+https://github.com/therealjuanmartinez/rich.git@main'
+    'rich @ git+https://github.com/therealjuanmartinez/rich.git@master'
 ]
 
 setup(
