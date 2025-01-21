@@ -1,0 +1,16 @@
+attrs==24.2.0
+git+https://github.com/therealjuanmartinez/gpt-cli.git@main
+git+https://github.com/therealjuanmartinez/rich.git@main
+beautifulsoup4==4.11.1
+colorama==0.4.4
+Pillow==10.4.0
+argparse==1.4.0
+platformdirs==4.3.6
+regex==2022.9.13
+readchar==4.2.0
+requests==2.32.3
+stringcase==1.2.0
+webvtt-py
+PyYAML==6.0.2
+jsonschema==3.2.0
+watchdog==6.0.0
