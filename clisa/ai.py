@@ -43,7 +43,7 @@ import tempfile
 from itertools import groupby
 from operator import itemgetter
 
-from clisa.colon_tools.base_colon_command import base_colon_command
+from clisa.colon_tools.base_colon_command import BaseColonCommand
 from clisa.command import Command  # Import the base Command class
 
 import importlib.util
