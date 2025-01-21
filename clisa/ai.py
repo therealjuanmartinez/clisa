@@ -30,7 +30,7 @@ import socket
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
-from json_detector import JSONDetector
+from clisa.json_detector import JSONDetector
 from rich.table import Table
 
 from rich.progress import SpinnerColumn, Progress, TextColumn
@@ -43,8 +43,8 @@ import tempfile
 from itertools import groupby
 from operator import itemgetter
 
-from colon_tools import base_colon_command
-from command import Command  # Import the base Command class
+from clisa.colon_tools import base_colon_command
+from clisa.command import Command  # Import the base Command class
 
 import importlib.util
 import importlib
@@ -52,11 +52,11 @@ import inspect
 import yaml
 from pathlib import Path
 
-from streaming_socket_server import StreamingSocketServer
+from clisa.streaming_socket_server import StreamingSocketServer
 
-from jprinty import *
+from clisa.jprinty import *
 
-from custom_exceptions import (
+from clisa.custom_exceptions import (
     LLMOutputNotValidJSONError,
     LLMRepeatJSONTwiceError,
     LLMDotMessageError,
@@ -65,7 +65,7 @@ from custom_exceptions import (
     ExitWithCodeException
 )
 
-from role import Role
+from clisa.role import Role
 from bs4 import BeautifulSoup, Comment
 from PIL import Image
 from colorama import Fore, Style
@@ -75,7 +75,7 @@ import yaml
 import jsonschema
 from jsonschema import validate
 
-from role import Role  # Make sure this import is at the top of ai.py
+from clisa.role import Role  # Make sure this import is at the top of ai.py
 
 #AI TODO we need to add the feature such that when we use new feature :XXXXX it also disables {{}}
 
@@ -662,7 +662,7 @@ def file_to_json_string(filename):
 def getAllToolsFromDirectory(dirs = []): #Similar to refreshTools, but this one only returns an array of tools and does not affect args
 #is args tools just called out but no value given
 
-    from tools.tool_base import ToolBase
+    from clisa.tools.tool_base import ToolBase
     import importlib.util
     import inspect
     global args
@@ -2590,7 +2590,7 @@ def sendRequest(no_std_out=False):
 
     #url = 'https://api.openai.com/v1/chat/completions'
 
-    from tools.tool_base import ToolBase
+    from clisa.tools.tool_base import ToolBase
 
     global messages
     global finalMessages

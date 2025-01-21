@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-# Dependencies including both PyPI and Git dependencies
+# Regular PyPI dependencies
 install_requires = [
     'attrs==24.2.0',
     'beautifulsoup4==4.11.1',
@@ -16,8 +16,14 @@ install_requires = [
     'PyYAML==6.0.2',
     'jsonschema==3.2.0',
     'watchdog==6.0.0',
-    'gpt-cli @ git+https://github.com/therealjuanmartinez/gpt-cli.git@main',
-    'rich @ git+https://github.com/therealjuanmartinez/rich.git@master'
+    'gpt-cli',
+    'rich'
+]
+
+# Git dependencies
+dependency_links = [
+    'git+https://github.com/therealjuanmartinez/gpt-cli.git@main#egg=gpt-cli-0.1.0',
+    'git+https://github.com/therealjuanmartinez/rich.git@master#egg=rich-0.1.0'
 ]
 
 setup(
@@ -25,6 +31,7 @@ setup(
     version="0.1.0",
     packages=find_packages(),
     install_requires=install_requires,
+    dependency_links=dependency_links,
     entry_points={
         'console_scripts': [
             'clisa=clisa.ai:main',
