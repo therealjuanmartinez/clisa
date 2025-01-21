@@ -23,7 +23,7 @@ install_requires = [
 
 # Git dependencies
 dependency_links = [
-    'git+https://github.com/therealjuanmartinez/gpt-cli.git@main#egg=gpt-command-line-0.3.0',
+    'git+https://github.com/therealjuanmartinez/gpt-cli.git@f4594d54f918c#egg=gpt-command-line-0.3.0',
     'git+https://github.com/therealjuanmartinez/rich.git@master#egg=rich-13.9.4'
 ]
 
