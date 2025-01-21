@@ -18,6 +18,7 @@ install_requires = [
     'watchdog==6.0.0',
     'gpt-cli',
     'rich',
+    'tiktoken',
     'openai==1.42.0'
 ]
 
