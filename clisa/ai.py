@@ -4258,15 +4258,18 @@ def main():
                 if isinstance(words_after_command, list):
                     words_after_command = " ".join(words_after_command)
                 #iterate through colon_command_modules
+                ran_command = False
                 for module in colon_command_modules:
                     if command_name in module.command_names():
                         #call the command
                         cursor_location = len(messages)
                         max_messages = 10000
                         module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
+                        ran_command = True
                         break
-                myinput = ""
-                continue
+                if ran_command:
+                    myinput = ""
+                    continue
 
             
             #AI begin processing inline commands that all start with a ":" so like :q! works, :vij works, :savetools, etc
