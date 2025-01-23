@@ -808,7 +808,7 @@ def setToolsArray(myarray):
 def refreshToolsRecursive(dirs=[TOOLS_TOP_DIR], force_to_active=False): #AI TODO, i think the need for this function is slightly overblown and we should remove/reduce it at some point. we are keeping instances of tools in tool_instances and this doesn't do much once those instances are created
 
     try:
-        from tools.tool_base import ToolBase
+        from clisa.tools.tool_base import ToolBase
     except:
         return
     import importlib.util
