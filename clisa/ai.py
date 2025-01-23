@@ -4264,7 +4264,7 @@ def main():
                         #call the command
                         cursor_location = len(messages)
                         max_messages = 10000
-                        module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
+                        module.execute(command_name, words_after_command, messages, cursor_location, max_messages) #run the colon command
                         ran_command = True
                         break
                 if ran_command:
