@@ -2934,7 +2934,7 @@ def sendRequest(no_std_out=False):
                                             #tool.pop("file", None)
                                             if (file not in tfiles):
                                                 tfiles.insert(0, file)
-
+                                                
                                         for file in tfiles:
                                             if (found):
                                                 break
@@ -2965,6 +2965,9 @@ def sendRequest(no_std_out=False):
 
                                                 for myclass in classes:
 
+                                                    #at this point in our testing BashCommandTool is indeeed a subclass of ToolBase
+                                                    #however it is not a subclass of ToolBase according to the next line. not sure what to do here 
+
                                                     if issubclass(myclass, ToolBase):
 
                                                         try:
@@ -2991,7 +2994,7 @@ def sendRequest(no_std_out=False):
                                                                         for function in json.loads(myclass.function_info()):
                                                                             function_name = function['function']['name']
                                                                             #we need to make sure toolName i.e. role_manager is in the function_info
-                                                                            
+
                                                                             #is_correct_tool_name = toolName == j['tool_call'] #j is wrong place... must come from myclass
                                                                             is_correct_tool_name = toolName == function_name
                                                                             if is_correct_tool_name:
@@ -3054,6 +3057,9 @@ def sendRequest(no_std_out=False):
                                                         except Exception as e:
                                                             print("Error: " + str(e)) #AI refactor this should be going to the messages array not printed here. REFACTOR OMG
                                                             resp += str(e)
+                                                    else:
+                                                        #printGrey("      myclass is not a subclass of ToolBase")
+                                                        pass
 
                                         if not found:
                                             resp += ("[ERROR COULD NOT FIND/LOAD TOOL] - Tool called: " + j['tool_call'] + " with the arguments: " + str(j['arguments']))
