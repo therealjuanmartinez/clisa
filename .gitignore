@@ -20,6 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+20*.json
 
 # Tool state files
 clisa/tools/active_tools.txt
@@ -27,3 +28,8 @@ clisa/tools/deactivated_tools.txt
 
 # Local database files
 clisa/roles.db
+
+# Ignore all files in colon_tools except __init__.py and base_colon_command.py
+clisa/colon_tools/*
+!clisa/colon_tools/__init__.py
+!clisa/colon_tools/base_colon_command.py

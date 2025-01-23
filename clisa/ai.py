@@ -444,6 +444,24 @@ def display_help():
             f"[{command_style}]{cmd['command']}[/]",
             f"[{description_style}]{cmd['description']}[/]"
         )
+    
+    #add blank row
+    table.add_row(
+        "",
+        ""
+    )
+    #now a header row to indicate the colon commands 
+    table.add_row(
+        "Custom Commands",
+        ""
+    )
+
+    #now add the colon commands, no color
+    for item in colon_command_modules:
+        table.add_row(
+            f":{item.command_names()[0]}",
+            f"{item.descriptions()[0]}"
+        )
 
     console.print(table)
     print()
