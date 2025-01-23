@@ -178,52 +178,39 @@ def loadColonStrings():
             content_dict[filename[:-6]] = content
 
 def loadColonCommands():
-    import inspect
+    global colon_command_modules
+    colon_command_modules = []
+    #print("\nLoading colon commands...")
     for filename in os.listdir(BASE_DIR/"colon_tools"):
         try:
             if filename.endswith('.py') and "base_colon_command" not in filename:
+                #print(f"\nProcessing file: {filename}")
                 #it is a class, load
-                    unique_module_name = f"module_{uuid.uuid4().hex}"
+                unique_module_name = f"module_{uuid.uuid4().hex}"
+                spec = importlib.util.spec_from_file_location(unique_module_name, BASE_DIR/"colon_tools"/filename)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
 
-                    # Load the module
-                    #print("aobut to load full path is " + dirr + "/" + file)
-                    spec = importlib.util.spec_from_file_location(unique_module_name, BASE_DIR/"colon_tools/" + filename)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
+                # List all attributes of the module
+                attributes = dir(module)
 
-                    # List all attributes of the module
-                    attributes = dir(module)
-
-                    # Filter out the classes
-                    colclasses = [getattr(module, attr) for attr in attributes if isinstance(getattr(module, attr), type)]
-
-                    # Filter out the abstract classes
-                    colclasses = [cls for cls in colclasses if not inspect.isabstract(cls)]
-
-                    if (len(colclasses) == 0):
-                        pass
-
-                    for myclass in colclasses:
-                        #print("myclass is " + str(myclass))
-                        try:
-                            unique_module_name = f"module_{uuid.uuid4().hex}"
-                            try:
-                                #check for actual class type of myclass and does it have command_names
-                                if hasattr(myclass, 'command_names'):
-                                    colon_command_modules.append(myclass)
-
-                                #if (myclass.command_names): #TODO check for actual class type dont rely on command_names
-                                    colon_command_modules.append(myclass)
-                            except Exception as e:
-                                print(str(e))
-                                pass
-                            #print(myclass.file_location())
-                        except Exception as e:
-                            print(str(e))
-                            pass
+                # Filter out the classes
+                colclasses = [getattr(module, attr) for attr in attributes if isinstance(getattr(module, attr), type)]
+                #print(f"Found {len(colclasses)} classes in {filename}")
+                
+                # Add any classes that inherit from BaseColonCommand
+                for colclass in colclasses:
+                    if issubclass(colclass, BaseColonCommand) and colclass != BaseColonCommand:
+                        #print(f"Adding command class: {colclass.__name__}")
+                        #print(f"  Commands: {colclass.command_names()}")
+                        #print(f"  Descriptions: {colclass.descriptions()}")
+                        colon_command_modules.append(colclass)
         except Exception as e:
-            print(str(e))
-            pass
+            print(f"Error loading colon command from {filename}: {e}")
+    
+    #print(f"\nTotal colon commands loaded: {len(colon_command_modules)}")
+    #for cmd in colon_command_modules:
+    #    print(f"  - {cmd.__name__}: {cmd.command_names()}")
 
 
 #AI if loading a role we dont need to load tools first
@@ -3398,7 +3385,7 @@ def load_colon_commands(directory, commands_array):
     
     
 def process_commands(myinput):
-    pattern = r':([a-z0-9_]+)([^:]*?)(?=:(?![a-z0-9])|$)'
+    pattern = r':([a-z0-9_]+)([^:]*?)(?=:(?![a-z0-9])|$)' #exampel 
     result = []
     global force_tools_flag
 
@@ -4241,78 +4228,15 @@ def main():
                 outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName, True)
                 os._exit(0)
 
-            #COLON COMMANDS CAPTURING BEGINS HERE
-            for module in colon_command_modules:
-                try:
-                    #TODO maybe we just do all the .py file loading herE? i dunno. probably not. 
-                    # List all attributes of the module
-                    attributes = dir(module)
+            global colon_command_modules
 
-                    # Filter out the classes
-                    cclasses = [getattr(module, attr) for attr in attributes if isinstance(getattr(module, attr), type)]
+            #print("colon_command_modules is " + str(colon_command_modules))
 
-                    # Filter out the abstract classes
-                    cclasses = [cls for cls in cclasses if not inspect.isabstract(cls)]
+            modcommands = []
+            descriptions = []
 
-                    if (len(cclasses) == 0):
-                        #print("No classes found in " + file)
-                        pass
-                    else:
-                        modcommands = module.command_names() #runt
-                        descriptions = module.descriptions()
-                    pass
-                except:
-                    pass
-
-            #we have to parse the commands. there may be more than one, and there may be text in between. know what i mean? OK.
-            #:comm1 stuff for commanad one :comm2 stufff for command 2 :comm3 :comm4 stuff
-            #this should result in 
-            # - comm1 with "stuff for command one"
-            # - comm2 with "stuff for command 2"
-            # - comm3 with "" or None
-            # - comm4 with "stuff"
             
-            if False: #AI ignore this segment for now 
-                #we are starting with a string called myinput
-                import re #TODO elsewhere please, probably
-
-                #myinput = "#we have to parse the commands. there may be more than one, and there may be text in between. know what i mean? OK. #:command1 some text
-                #:anothercommand here are some words :command3 :command4 more stuff"
-
-                # Regular expression to match the commands and their associated text
-                pattern = r':([a-z0-9]+)([^:]*?)(?=:(?![a-z0-9])|$)'
-
-                # Prepare the result
-                result = {}
-
-                # Loop through the input to find all matches
-                temp_myinput = myinput
-                while myinput:
-                    match = re.search(pattern, myinput)
-                    if match:
-                        cmd = match.group(1)
-                        text = match.group(2).strip() if match.group(2) else ''
-                        result[cmd] = text
-                        #print("text is " + text + " and match is " + str(match) + " and match end is " + str(match.end()))
-                        # Remove the matched portion from the input string
-                        #myinput = myinput[match.end():]
-                        myinput = myinput[:match.start()]
-                        print("myinput is now" + myinput)
-                    else:
-                        break
-
-                # Output the result
-                for command, text in result.items():
-                    print(f"- {command} with '{text}'")
-
-                #TODO at this point we want to see that all the colon command files have been 
-                #read in adn parsed and etc etc if that makes sense.
-                #What has happend up to this point should be a model for changes that we want to see. 
-
-
-                myinput = temp_myinput #eventually not needed
-            
-            myinput = process_commands(myinput) 
+            #myinput = process_commands(myinput)  #removing this for now, if a while goes by and hasn't been missed, remove it
             missionstr = process_mission() #AI yes this resets myinput entirely,  if has value
 
             if missionstr is not None and (len(missionstr) > 0):
@@ -4322,6 +4246,27 @@ def main():
 
             if myinput == "": 
                 print()
+
+            
+            #at this point we may have a colon command, so we need to check for that
+            if myinput.strip().startswith(":"):
+                #get the command name
+                command_name = myinput.strip()[1:].split()[0]
+                #words_after_commands should be a string representing all words after thec ommand but with strip() of course
+                words_after_command = myinput.strip()[1:].split()[1:]
+                #if it's a list, join it with spaces
+                if isinstance(words_after_command, list):
+                    words_after_command = " ".join(words_after_command)
+                #iterate through colon_command_modules
+                for module in colon_command_modules:
+                    if command_name in module.command_names():
+                        #call the command
+                        cursor_location = len(messages)
+                        max_messages = 10000
+                        module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
+                        break
+                myinput = ""
+                continue
 
             
             #AI begin processing inline commands that all start with a ":" so like :q! works, :vij works, :savetools, etc
