@@ -1746,6 +1746,7 @@ def check_for_interrupt(force=False):
 def getch():
     """Get a single character from standard input, handling special keys and interrupts."""
     global original_sigint_handler, getch_active, latest_message
+
     fd = sys.stdin.fileno()
     old_settings = termios.tcgetattr(fd)
 
@@ -2266,12 +2267,6 @@ def printMessagesToScreen(printLastMessageIfUser=True, limitByTerminalSize=False
     Print the messages to the screen, optionally printing the last message if it is a user message
     """
     global messages
-
-    #can we get the # of lines in the terminal?
-    if (len(mystdin) == 0):
-        #lines_in_terminal = int(subprocess.check_output(['stty', 'size']).split()[0]) #TODO understand and/or fix these couple lines
-        lines_in_terminal = 0 #TODO why is this line here?
-        limitByTerminalSize = False
 
     messagesCopy = []
 
@@ -3549,6 +3544,16 @@ def main():
     loadColonCommands()
     loadSysColons()
 
+    # Check if input is being piped
+    piped_input = ""
+    if not sys.stdin.isatty():
+        # Read all piped input at once
+        try:
+            piped_input = sys.stdin.read().strip()
+            sys.stdin = open("/dev/tty")
+        except:
+            pass
+
     args.tools_array = []
     
     force_tools_flag = False
@@ -3640,8 +3645,7 @@ def main():
 
     args.init_assistant = False
 
-    global mystdin
-    mystdin = ""
+    args.prompt = piped_input
 
     #global variables for interrupt handling
     global interrupt_requested
@@ -3947,12 +3951,18 @@ def main():
                     c=''
                     if True:
                         try:
+                            #if not sys.stdin.isatty():
+                            #    print("Waiting for terminal...")
+                            #    try:
+                            #        tty_fd = os.open("/dev/tty", os.O_RDWR)
+                            #    except OSError:
+                            #        print("Failed to open terminal for keyboard input.")
+                                #debounce but wait
                             c = getch() #read a key
                         except KeyboardInterrupt as e:
                             raise e
 
                         #AI begin processing individual key presses for special cases like up arrow eshtc 
-
                         if c == 'up': #UP ARROW
                             """
                             Go up in history of this conversation, 
@@ -4045,8 +4055,8 @@ def main():
                             #attempt to read /dev/shm/convo.input into myinput
                             try:
                                 with open("/dev/shm/convo.input", "r") as f:
-                                    myinput = f.read()
-                                    #remove single endline from end of myinput if it exists
+                                    myinput = f.read()  #.strip()
+                                    #remove single endline from end of myinput if it exists (vi seems to add one)
                                     if (myinput[-1] == "\n"):
                                         myinput = myinput[:-1]
                                     #clear screen
@@ -4393,8 +4403,8 @@ def main():
                 os.system('reset')
                 try:
                     with open("/dev/shm/convo.input", "r") as f:
-                        myinput = f.read()#.strip()
-                        #remove single endline from end of myinput if it exists (vi seems to add one)
+                        myinput = f.read()
+                        #remove single endline from end of myinput if it exists
                         if (myinput[-1] == "\n"):
                             myinput = myinput[:-1]
                         #clear screen
