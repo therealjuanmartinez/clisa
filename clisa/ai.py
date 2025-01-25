@@ -1563,7 +1563,7 @@ def get_tool_instance(tool_name, myclass):
     return new_instance
 
 
-def init_assistantt():
+def init_assistantt(): #aisuite here
     from gptcli.assistant import ( #TODO all these imports shouldn't be in so many places for this specific one thing
     #from cloudassistant import (
         Assistant,
@@ -1625,7 +1625,7 @@ def init_assistantt():
         }
 
         global assistantt
-        assistantt = Assistant(config)
+        assistantt = Assistant(config) #aisuite here obviously 
         args.init_assistant = True
 
 
@@ -2120,7 +2120,7 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
 
 
                 #print(str(args.tools_array))
-                for chunk in content: #AI is force_to_active yes or no here?
+                for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
                     commandflag = False
                     if isinstance(chunk, tuple):
@@ -2510,7 +2510,7 @@ def cleanDotMessages(themessages):
     for i in range(len(cleanedMessages)-1, -1, -1):                                                                                             
         if cleanedMessages[i]['role'] == "assistant":                                                                                           
             lastAssistantIndex = i                                                                                                              
-            break                                                                                                                               
+            break                                                                                                                              
                                                                                                                                                 
     try:                                                                                            
         #is cleanedMessages[lastAssistantIndex]['content'] a dict?
@@ -2656,9 +2656,9 @@ def sendRequest(no_std_out=False):
                         tempmessages.pop(0)
                 
                 if args.tools_array is None or (len(args.tools_array) == 0):
-                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages), {}, args.stream)
+                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages), {}, args.stream) #aisuite here
                 else:
-                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream, getActiveTools(), force_tools_flag))
+                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream, getActiveTools(), force_tools_flag)) #aisuite here
                 break
 
 
@@ -3190,6 +3190,9 @@ def sendRequest(no_std_out=False):
         
         #TODO: refactor this 4 lines 
         tempmessages = messages
+        if args.model[0:2] == "o1":
+            if tempmessages[0]['role'] == "system":
+                tempmessages.pop(0)
         if (args.max and args.max > 0):
             tempmessages = messages[-int(args.max):]
             args.max = args.max + 1
@@ -3319,7 +3322,7 @@ def outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyM
     #dlog("there were no non-system messages, so we did not write a file")
 
 
-#AI eureeka moment, there needs to be a generic 'tool' tand one or more get created/instantiated when a role is loaded. The tool would be used to guide the role'd LLM through a set of tasks defined in the role itself. the role, as I see it, will need to have tasks that imply a certain set of steps and a certain set of tools for each step. i guess each task will need some description of what is required. in this way, a task can have certain baseline tools but then also tools that effectively guide the LLM through the process of completing a multi-step task and limit the tools at each step, and the tools themselves will be instantiated as needed (the ones guiding the process)
+#AI eureeka moment, there needs to be a generic 'tool' tand one or more get created/instantiated when a role is loaded. The tool would be used to guide the role'd LLM through a set of tasks defined in the role itself. the role, as I see it, will need to have tasks that imply a certain set of steps and a certain set of tools for each step. i guess each task will need some description of what is required. in this way, a task can have certain baseline tools but then also tools that effectively guide the process of completing a multi-step task and limit the tools at each step, and the tools themselves will be instantiated as needed (the ones guiding the process)
 
 #AI unrelated to last note, we need to talk about a 'handoff' method to hand things off between different roles or whatever
 
@@ -3645,7 +3648,7 @@ def main():
 
     args.init_assistant = False
 
-    args.prompt = piped_input
+    args.prompt = (piped_input + "\n" + args.prompt).strip()
 
     #global variables for interrupt handling
     global interrupt_requested
