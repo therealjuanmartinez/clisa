@@ -1,5 +1,5 @@
 {
-    "default_model": "openai:gpt-4-turbo-preview",
+    "default_model": "openai:gpt-4o",
     "default_params": {
         "temperature": 0.7,
         "stream": true,

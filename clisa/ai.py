@@ -1658,7 +1658,7 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
             'model': model_to_use,
             'messages': messages,
             #'temperature': params.get('temperature', 0.7),
-            #'stream': params.get('stream', False)
+            'stream': params.get('stream', True)
         }
         
         # Only add tools and tool_choice if we have tools
@@ -1667,40 +1667,19 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
             api_params['tool_choice'] = "auto" if not force_tools else "force"
         
         response = client.chat.completions.create(**api_params)
-        
+            
         # Handle streaming response - return immediately if streaming
         try:
             if api_params['stream']:
                 def stream_generator():
                     for chunk in response:
-                        # Try all possible ways to get content from the chunk
-                        if hasattr(chunk, 'text'):
-                            yield chunk.text
-                        elif hasattr(chunk, 'content'):
-                            yield chunk.content
-                        elif hasattr(chunk, 'delta'):
-                            if hasattr(chunk.delta, 'content'):
-                                content = chunk.delta.content
-                                if content:
-                                    yield content
-                            elif hasattr(chunk.delta, 'text'):
-                                yield chunk.delta.text
-                        elif isinstance(chunk, str):
-                            yield chunk
+                        if chunk.choices[0].delta.content is not None and isinstance(chunk.choices[0].delta.content, str):
+                            yield chunk.choices[0].delta.content
                 return stream_generator()
         except Exception as e:
             pass
         
-        # Handle non-streaming response
-        # Try all possible ways to get content from the response
-        if hasattr(response, 'text'):
-            return response.text
-        elif hasattr(response, 'content'):
-            return response.content[0].text if isinstance(response.content, list) else response.content
-        elif hasattr(response.choices[0], 'message'):
-            return response.choices[0].message.content
-        else:
-            return str(response)
+        return response.choices[0].message.content #if stream didn't work
         
     except Exception as e:
         print(f"Error in chat completion: {str(e)}")
