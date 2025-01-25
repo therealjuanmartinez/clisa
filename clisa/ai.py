@@ -4,6 +4,12 @@ import requests
 #from unittest.util import _MAX_LENGTH
 import os
 import time,sys
+try:
+    from aisuite import Client
+except ImportError:
+    print("Error: aisuite package not found. Please install it with:")
+    print("pip install aisuite[all]")
+    sys.exit(1)
 #import openai as openai #not needed for gpt-4 / 'modern' API calls, seemingly
 import datetime
 import glob
@@ -312,6 +318,10 @@ parser.add_argument('--tlist', action='store_true', help='List all tools and exi
 parser.add_argument('-doa', '--die_on_assert', action='store_true', help='Kill process after assert_completion')
 parser.add_argument('-rv', '--role_variables', type=str, help='Set role variables (key=value,key2=value2) - can use spaces in values if string is put in quotes')
 parser.add_argument('--no_transcription', '-nt', action='store_true', help='Do not connect to transcription server')
+parser.add_argument('--stream', action='store_true', default=True,
+                        help='Enable streaming responses (default: True)')
+parser.add_argument('--no-stream', dest='stream', action='store_false',
+                        help='Disable streaming responses')
 
 
 
@@ -1563,86 +1573,140 @@ def get_tool_instance(tool_name, myclass):
     return new_instance
 
 
-def init_assistantt(): #aisuite here
-    from gptcli.assistant import ( #TODO all these imports shouldn't be in so many places for this specific one thing
-    #from cloudassistant import (
-        Assistant,
-        DEFAULT_ASSISTANTS,
-        AssistantGlobalArgs,
-        init_assistant,
-    )
-    global args
-    if True:
-        """
-        Initialize the assistant
-        """
-        if True:
-            args.stream = True
-            #get model 
-            if (args.model == "3.5"):
-                #model='gpt-3.5-turbo'
-                #args.model='gpt-3.5-turbo-16k'
-                args.model='gpt-3.5-turbo'
-            elif (args.model == "4oo"):
-                args.model='gpt-4-0314'
-            elif (args.model == "4"):
-                #args.model='gpt-4-1106-preview'
-                #args.model='gpt-4-turbo-2024-04-09'
-                args.model='gpt-4o'
-            elif (args.model == "4m"):
-                args.model='gpt-4o-mini'
-            elif (args.model == "4v"):
-                args.model='gpt-4-vision-preview'
-            elif (args.model == "4o"):
-                args.model='gpt-4o-2024-11-20'
-            elif (args.model[0:2] == "o1"):
-                args.model='o1-mini'
-                args.temperature = 1
-                args.stream = False
-            elif (args.model == 'claude'):
-                args.model='claude-3-opus-20240229'
-            elif (args.model == 'sonnet'):
-                #args.model='claude-3-sonnet-20240229'
-                args.model='claude-3-5-sonnet-20240620'
-            elif (args.model == 'haiku'):
-                args.model='claude-3-haiku-20240307'
-            elif (args.model == 'gemini') or (args.model == 'g'):
-                #args.model='gemini-1.0-pro'
-                args.model='gemini-1.5-pro'
-            elif (args.model == 'gv'):
-                args.model='gemini-1.0-pro-vision'
-            elif (args.model == 'dolphin'):
-                args.model='dolphin'
-        
-            
-        global config
-        config = {
-            "model": args.model,  # Specify the model here
-            "temperature": args.temperature, 
-            "top_p": 1.0,
-            "stream": args.stream,
-            #"messages": [],
-        }
+def load_config():
+    """Load configuration from config.json"""
+    config_path = os.path.join(BASE_DIR, 'config.json')
+    with open(config_path, 'r') as f:
+        return json.load(f)
 
-        global assistantt
-        assistantt = Assistant(config) #aisuite here obviously 
-        args.init_assistant = True
-
-
-#spin off a thread to lazy load the assistant
-#assistant = None
-def lazy_load_assistant():
-    #global assistant
-    #assistant = init_assistant(args)
-    #assistant.load()
-    from gptcli.assistant import (
-    #from cloudassistant import (
-        Assistant,
-        DEFAULT_ASSISTANTS,
-        AssistantGlobalArgs,
-        init_assistant,
-    )
+def init_assistantt():
+    """Initialize the aisuite client with configuration"""
+    global client
+    global default_model
     
+    config = load_config()
+    client = Client()
+    
+    # Get the provider we need from default_model
+    default_provider = config['default_model'].split(':')[0]
+    
+    # Configure providers from config file
+    provider_config = {}
+    if default_provider in config['providers']:
+        settings = config['providers'][default_provider]
+        provider_config[default_provider] = {
+            key: os.environ.get(value) if key == 'api_key' else value
+            for key, value in settings.items()
+            if key != 'models'  # Exclude models list from client config
+        }
+    
+    client.configure(provider_config)
+    default_model = config['default_model']
+    return client
+
+def send_chat_completion(messages, model=None, custom_params=None, tools=None, force_tools=False):
+    """
+    Send a chat completion request using aisuite
+    
+    Args:
+        messages: List of message dictionaries
+        model: Optional model override (default uses config default_model)
+        custom_params: Optional dictionary of parameters to override defaults
+        tools: Optional list of tools to make available
+        force_tools: Whether to force tool usage
+    
+    Returns:
+        tuple: (response_content, metadata) for non-streaming
+        generator: yields chunks for streaming
+    """
+    global client
+    global default_model
+    
+    # Load config for parameters
+    config = load_config()
+    
+    # Get model to use
+    model_to_use = model or default_model
+    provider, model_name = model_to_use.split(':')
+    
+    # Get default parameters
+    params = config['default_params'].copy()
+    
+    # Override with model-specific parameters if they exist
+    for provider_info in config['providers'].values():
+        for model_info in provider_info['models']:
+            if model_info['name'] == model_name:
+                params.update({
+                    'temperature': model_info['temperature'],
+                    'stream': model_info['stream']
+                })
+                break
+    
+    # Override with any custom parameters
+    if custom_params:
+        params.update(custom_params)
+    
+    try:
+        # Prepare tool definitions if provided
+        tool_definitions = []
+        if tools:
+            for tool in tools:
+                tool_definitions.extend(json.loads(tool.function_info()))
+        
+        # Base parameters for the API call
+        api_params = {
+            'model': model_to_use,
+            'messages': messages,
+            #'temperature': params.get('temperature', 0.7),
+            #'stream': params.get('stream', False)
+        }
+        
+        # Only add tools and tool_choice if we have tools
+        if tool_definitions:
+            api_params['tools'] = tool_definitions
+            api_params['tool_choice'] = "auto" if not force_tools else "force"
+        
+        response = client.chat.completions.create(**api_params)
+        
+        # Handle streaming response - return immediately if streaming
+        try:
+            if api_params['stream']:
+                def stream_generator():
+                    for chunk in response:
+                        # Try all possible ways to get content from the chunk
+                        if hasattr(chunk, 'text'):
+                            yield chunk.text
+                        elif hasattr(chunk, 'content'):
+                            yield chunk.content
+                        elif hasattr(chunk, 'delta'):
+                            if hasattr(chunk.delta, 'content'):
+                                content = chunk.delta.content
+                                if content:
+                                    yield content
+                            elif hasattr(chunk.delta, 'text'):
+                                yield chunk.delta.text
+                        elif isinstance(chunk, str):
+                            yield chunk
+                return stream_generator()
+        except Exception as e:
+            pass
+        
+        # Handle non-streaming response
+        # Try all possible ways to get content from the response
+        if hasattr(response, 'text'):
+            return response.text
+        elif hasattr(response, 'content'):
+            return response.content[0].text if isinstance(response.content, list) else response.content
+        elif hasattr(response.choices[0], 'message'):
+            return response.choices[0].message.content
+        else:
+            return str(response)
+        
+    except Exception as e:
+        print(f"Error in chat completion: {str(e)}")
+        #stack trace please
+        print(traceback.format_exc())
+        return None, None
 
 
 def print_models():
@@ -2112,14 +2176,13 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
             with Live(console=console, auto_refresh=False) as live:
             #with Live(console=console, refresh_per_second=3) as live:
 
-                #if content is a stirng, print it here in green
-                if isinstance(content, str):
-                    printGreen("content is a string: " + content)
-
                 firstBlankLine = False
 
-
                 #print(str(args.tools_array))
+                #if content is a string convert it to a list
+                if isinstance(content, str):
+                    content = [content]
+
                 for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
                     commandflag = False
@@ -2576,17 +2639,7 @@ def cleanDotMessages(themessages):
 
 def sendRequest(no_std_out=False):
 
-    global assistantt
-    global config
-    from gptcli.assistant import (
-    #from cloudassistant import (
-        Assistant,
-        DEFAULT_ASSISTANTS,
-        AssistantGlobalArgs,
-        init_assistant,
-    )
-    init_assistantt()
-    assistantt = Assistant(config)
+    init_assistantt()  # Initialize our aisuite client instead
 
     #url = 'https://api.openai.com/v1/chat/completions'
 
@@ -2656,9 +2709,21 @@ def sendRequest(no_std_out=False):
                         tempmessages.pop(0)
                 
                 if args.tools_array is None or (len(args.tools_array) == 0):
-                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages), {}, args.stream) #aisuite here
+                    active_tools = getActiveTools()
+                    completion = send_chat_completion(
+                        messages=tempmessages,
+                        tools=active_tools if active_tools else None,
+                        force_tools=force_tools_flag
+                    )
+                    ret, jsoncommand = printAiContent(completion, {}, args.stream)
                 else:
-                    ret, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream, getActiveTools(), force_tools_flag)) #aisuite here
+                    active_tools = getActiveTools()
+                    completion = send_chat_completion(
+                        messages=tempmessages,
+                        tools=active_tools if active_tools else None,
+                        force_tools=force_tools_flag
+                    )
+                    ret, jsoncommand = printAiContent(completion, {}, args.stream)
                 break
 
 
@@ -3637,10 +3702,6 @@ def main():
 
     if (args.jo is not None or args.jou is not None):
         args.oneshot = True
-
-    threading.Thread
-    thread = threading.Thread(target=lazy_load_assistant)
-    thread.start()
 
     if args.models:
         print_models()
@@ -5640,7 +5701,7 @@ def main():
                         AssistantGlobalArgs,
                         init_assistant,
                     )
-                    assistant = Assistant(config)
+                    init_assistantt()
                     print("Retrying...\n")
                 retryCount += 1
 
