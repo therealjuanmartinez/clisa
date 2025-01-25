@@ -21,6 +21,7 @@ wheels/
 *.egg
 MANIFEST
 20*.json
+*.ipynb
 
 # Tool state files
 clisa/tools/active_tools.txt
