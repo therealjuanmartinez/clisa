@@ -287,7 +287,7 @@ parser.add_argument('-r', '--role', type=str, help='Load Role by name')
 parser.add_argument('-re', '--role_edit', type=str, help='Load Role by name')
 parser.add_argument('--role_list', '-rl', action='store_true', help='List all available roles and exit')
 parser.add_argument('--models', action='store_true', help='list models then exit')
-parser.add_argument('-t', '--temperature', type=float, default=0.7, help='[DO NOT USE] Temperature, 0.0 to 2.0, higher is more random')
+parser.add_argument('--temperature', type=float, default=0.7, help='[DO NOT USE] Temperature, 0.0 to 2.0, higher is more random')
 parser.add_argument('--system', "-sys", type=str, default="", help='Prompt to setup the nature of the AI - THIS GOES TO SYSTEM MESSAGE')
 parser.add_argument('-p', '--prompt', type=str, default="", help='Prompt')
 parser.add_argument('-o', '--oneshot', action='store_true', help='One Shot Mode, only one back/forth cycle and only prints AI response')
@@ -319,7 +319,7 @@ parser.add_argument('--nobash', action='store_true', help='No {{[command]}} bash
 parser.add_argument('--tlist', action='store_true', help='List all tools and exit')
 parser.add_argument('-doa', '--die_on_assert', action='store_true', help='Kill process after assert_completion')
 parser.add_argument('-rv', '--role_variables', type=str, help='Set role variables (key=value,key2=value2) - can use spaces in values if string is put in quotes')
-parser.add_argument('--no_transcription', '-nt', action='store_true', help='Do not connect to transcription server')
+parser.add_argument('--transcription', action='store_true', help='Connect to transcription server')
 parser.add_argument('--stream', action='store_true', default=True,
                         help='Enable streaming responses (default: True)')
 parser.add_argument('--no-stream', dest='stream', action='store_false',
@@ -1581,6 +1581,15 @@ def load_config():
     with open(config_path, 'r') as f:
         return json.load(f)
 
+def load_transcription_config():
+    try:
+        """Load configuration from config.transcription.json"""
+        config_path = os.path.join(BASE_DIR, 'config.transcription.json')
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except:
+        return None
+
 def init_assistantt():
     """Initialize the aisuite client with configuration"""
     global client
@@ -1742,21 +1751,59 @@ def interrupt_handler(signum, frame):
     interrupt_requested.set()
     print("\nInterrupt requested in getch.")
 
+def get_transcription_config():
+    """Get transcription configuration from config file or prompt user for it."""
+    config = load_transcription_config()
+    if config is None or 'transcription' not in config:
+        print("\n\nTranscription settings not found. Please provide them:")
+        host = input("\nEnter transcription host: ").strip()
+        if not host:
+            return None
+
+        while True:
+            try:
+                port = input("Enter transcription port (default: 65433): ").strip()
+                #is port an int and a legal port number?
+                #is it blank
+                if port.strip() == "":
+                    port = 65433
+                elif not port.isdigit() or int(port) < 1 or int(port) > 65535:
+                    print("Please enter a valid port number")
+                    continue
+                break
+            except ValueError:
+                print("Please enter a valid port number")
+
+        config = {}
+        config['transcription'] = {
+            'host': host,
+            'port': port
+        }
+
+        # Save to config file
+        config_path = os.path.join(BASE_DIR, 'config.transcription.json')
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+
+    return config['transcription']
 
 
-def check_for_interrupt(force=False):
+def check_for_interrupt(force=False, scribe_config=None):
     """Thread that listens for incoming messages from the server and checks for interrupts."""
 
-    if args.no_transcription and not force:
+    if not args.transcription and not force:
         return
 
     global latest_message
     import struct
 
-    # Attempt to set up the socket connection
-    host = "cave.keychaotic.com"
-    port = 65433  # Specified port
+    if scribe_config is None:
+        return
+
+    host = scribe_config['host']
+    port = scribe_config['port']
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
 
     # Define metadata
     METADATA = generate_remote_control_json()
@@ -3768,10 +3815,12 @@ def main():
     latest_message = ""  # Global variable to store the latest message
 
     # Start the interrupt checking thread
-    global killThread
-    killThread = False
-    interrupt_thread = threading.Thread(target=check_for_interrupt, daemon=True)
-    interrupt_thread.start()
+    if args.transcription:
+        global killThread
+        killThread = False
+        scribe_config = get_transcription_config()
+        interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True, scribe_config), daemon=True)
+        interrupt_thread.start()
 
     global messages
     files = []
@@ -3803,9 +3852,6 @@ def main():
             sys.exit(1)
         args.prompt = url_to_text(args.url) + "\n\n" + args.prompt
         
-
-    lostinput = ""
-
 
     if (args.filename != ""):
         #identify newest .json file in the ./conversation directory and put it in filename
@@ -4556,8 +4602,9 @@ def main():
                 #interrupt_thread = threading.Thread(target=check_for_interrupt, daemon=True)
                 #start interrupt thread where we force it to connect to transcription service
                 #by passing True to the force value that is accepted by the ccheck_for_interrupt function
-                
-                interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True,), daemon=True)
+
+                scribe_config = get_transcription_config()
+                interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True, scribe_config), daemon=True)
                 interrupt_thread.start()
 
                 myinput = ""
