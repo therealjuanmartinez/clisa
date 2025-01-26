@@ -34,3 +34,6 @@ clisa/roles.db
 clisa/colon_tools/*
 !clisa/colon_tools/__init__.py
 !clisa/colon_tools/base_colon_command.py
+
+*config*.json
+launch.json
