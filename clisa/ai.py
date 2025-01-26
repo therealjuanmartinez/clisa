@@ -27,12 +27,11 @@ import signal
 import select
 import socket
 
-#from assistant import (
-#    Assistant,
-#    DEFAULT_ASSISTANTS,
-#    AssistantGlobalArgs,
-#    init_assistant,
-#)
+
+
+
+
+
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
@@ -51,6 +50,7 @@ from operator import itemgetter
 
 from clisa.colon_tools.base_colon_command import BaseColonCommand
 from clisa.command import Command  # Import the base Command class
+from clisa.tools.tool_base import ToolBase
 
 import importlib.util
 import importlib
@@ -97,6 +97,8 @@ homedir = os.path.expanduser("~")
 conversationDirectory = homedir + "/conversations/"
 
 loaded_role = None
+
+
 
 #AI feat when performing a mission, default to no blocking or hit enter to continue or something, maybe that is a mode that can be set....  i was thinking param to the command, but, that seems inappropriate
 
@@ -1604,6 +1606,13 @@ def init_assistantt():
     default_model = config['default_model']
     return client
 
+
+#Enum for message types in tool processing
+class MessageType:
+   TOOLNAME = 1  # When we receive the tool name
+   TOOLARGS = 2  # When we receive tool arguments
+   TEXT = 3      # Regular text/content from LLM
+
 def send_chat_completion(messages, model=None, custom_params=None, tools=None, force_tools=False):
     """
     Send a chat completion request using aisuite
@@ -1651,36 +1660,52 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
         tool_definitions = []
         if tools:
             for tool in tools:
-                tool_definitions.extend(json.loads(tool.function_info()))
-        
+                # Each tool should be a dict with 'type' and 'function' keys
+                if isinstance(tool, dict) and 'function' in tool:
+                    # Ensure type is set
+                    tool_def = {
+                        'type': 'function',
+                        'function': tool['function']
+                    }
+                    tool_definitions.append(tool_def)
+
         # Base parameters for the API call
         api_params = {
             'model': model_to_use,
             'messages': messages,
-            #'temperature': params.get('temperature', 0.7),
             'stream': params.get('stream', True)
         }
-        
-        # Only add tools and tool_choice if we have tools
+
         if tool_definitions:
             api_params['tools'] = tool_definitions
             api_params['tool_choice'] = "auto" if not force_tools else "force"
-        
+
         response = client.chat.completions.create(**api_params)
             
         # Handle streaming response - return immediately if streaming
-        try:
-            if api_params['stream']:
-                def stream_generator():
-                    for chunk in response:
-                        if chunk.choices[0].delta.content is not None and isinstance(chunk.choices[0].delta.content, str):
-                            yield chunk.choices[0].delta.content
-                return stream_generator()
-        except Exception as e:
-            pass
-        
-        return response.choices[0].message.content #if stream didn't work
-        
+        if 'openai.Stream' in str(type(response)): #TODO make this not depend on string matching
+            def stream_generator():
+                for chunk in response:
+                    #chunk.choices[0].delta.tool_calls[0].function.arguments  # this gets us the streamed tool call text
+                    #print it here if it exists and is a string
+                    try:
+                        if chunk.choices[0].delta.tool_calls[0].function.arguments is not None:
+                            if chunk.choices[0].delta.tool_calls[0].function.name is not None:
+                                #if we get here, this means that we have started a new tool call.  this will always signify the start of a new tool call, and the
+                                #name will always be fully populated to this field at this point
+                                #yield "[{ \"tool_call\": \"" + chunk.choices[0].delta.tool_calls[0].function.name + "\", \"arguments\": "
+                                yield chunk.choices[0].delta.tool_calls[0].function.name, MessageType.TOOLNAME
+                            elif chunk.choices[0].delta.tool_calls[0].function.arguments is not None:
+                                yield chunk.choices[0].delta.tool_calls[0].function.arguments, MessageType.TOOLARGS
+                        pass
+                    except:
+                        pass
+                    if chunk.choices[0].delta.content is not None and isinstance(chunk.choices[0].delta.content, str):
+                        yield chunk.choices[0].delta.content, MessageType.TEXT
+            return stream_generator()
+        else:
+            return response.choices[0].message.content, MessageType.TEXT #if stream didn't work - also need to make this work with tool calls
+
     except Exception as e:
         print(f"Error in chat completion: {str(e)}")
         #stack trace please
@@ -2162,27 +2187,40 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
                 if isinstance(content, str):
                     content = [content]
 
+                tool_name = None
+                commands = []
+                tool_args_json = ""
+                tool_calls = []  # List to store all tool calls
                 for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
                     commandflag = False
                     if isinstance(chunk, tuple):
-                        value, commandflag = chunk
+                        value, message_type = chunk
                         chunk = value
-                    
-                    if (commandflag):
-                        jsoncommand += chunk
-                        #print("jc:" + jsoncommand)
+
+                    if message_type == MessageType.TOOLNAME:
+                        #if we have a previous tool_name and valid args, add them to tool_calls
+                        json_is_valid = JSONDetector.is_valid_json(tool_args_json)
+                        if json_is_valid and tool_name:
+                            tool_calls.append({
+                                "tool_call": tool_name,
+                                "arguments": json.loads(tool_args_json)
+                            })
+                            tool_args_json = ""
+                        tool_name = chunk
+                        commandflag = True
+                        commands.append(tool_name)
+                    elif message_type == MessageType.TOOLARGS:
+                        tool_args_json += chunk
 
                     if (firstBlankLine == False):
-                        #print('23 - ')
                         print()
                         firstBlankLine = True
 
-                    if not commandflag:
-                        try:
-                            response += chunk
-                        except:
-                            response += str(chunk)
+                    try:
+                        response += chunk
+                    except:
+                        response += str(chunk)
 
                     if sserver is not None:
                         sserver.send_data(chunk)
@@ -2216,6 +2254,18 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
                     if interrupt_requested.is_set():
                         #interrupt_requested.clear()
                         raise KeyboardInterrupt() #ultimately, getch should handle the interrupt fully since we're not resetting anything here
+                
+                #AT THIS POINT WE HAVE COLLECTED ALL THE TOOL CALLS AND ARGS
+                json_is_valid = JSONDetector.is_valid_json(tool_args_json)
+                if json_is_valid and tool_name: #handle the last tool call if it exists
+                    tool_calls.append({
+                        "tool_call": tool_name,
+                        "arguments": json.loads(tool_args_json)
+                    })
+                
+                # Set json_commands_final to the list of tool calls
+                json_commands_final = tool_calls if tool_calls else None
+                
         else:
             # Handling when noprint is True
             for chunk in content:
@@ -2225,7 +2275,7 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
         # Handling keyboard interrupts
         print()
 
-        #we need to know if we have just interrupted a tool call. if we have, we probably don't want tools to remain active, 
+        #we need to know if we have just interrupted a tool call (not the tool call operation itself at this point, but the receipt of a tool call). if we have, we probably don't want tools to remain active, 
         #so let's disable tools here provided that the last message was a user message containing "RESPONSE:" followed by an indeterminate amount of whitespace and then followed by valid JSON.
         if (len(messages) > 0 and messages[-1]['role'] == "user" and "RESPONSE:" in messages[-1]['content']):
             #get the last message
@@ -2233,11 +2283,6 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
             #get the content after RESPONSE: and strip whitespace
             lastMessage = lastMessage.split("RESPONSE:")[1].strip()
             #now check if it is valid JSON
-            if (JSONDetector.is_valid_json(lastMessage)):
-                #ok, it is valid JSON, so let's disable tools
-                #deactivateTools()
-                #printYellow("Deactivated all tools. (you're welcome)")
-                pass
 
         live.update(Markdown(response, style="green", code_theme="rrt", code_padding=0))
         live.refresh()
@@ -2263,8 +2308,13 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
         if sserver is not None:
             sserver.stop()
 
+    #ok we need to make a json string from json_commands_final, and it must use double quotes not single quotes
+    try:
+        json_commands_final_str = json.dumps(json_commands_final)
+    except:
+        json_commands_final_str = None
 
-    return ((json_objects if json_objects else response), jsoncommand)
+    return ((json_objects if json_objects else response), json_commands_final_str)
 
 # NEW: Helper function to find the end of a JSON object
 def find_json_end(s):
@@ -2762,9 +2812,13 @@ def sendRequest(no_std_out=False):
 
         jo = None
         try:
-            jo = json.loads(jsoncommand)
-            continue_processing = True
-        except:
+            #is jsoncommand a valid json string?
+            if JSONDetector.is_valid_json(jsoncommand):
+                jo = json.loads(jsoncommand)
+                continue_processing = True
+            else:
+                continue_processing = False
+        except Exception as e:
             continue_processing = False
 
         max_iterations = 20  # Add a maximum number of iterations as a safeguard
@@ -2788,8 +2842,6 @@ def sendRequest(no_std_out=False):
                         first = True
             #if (toolCallString != ""):
             #    toolCallString = "LLM Called Tool(s): " + toolCallString 
-
-
 
 
             if not hasattr(args, 'last_tool_call_string') or (args.last_tool_call_string == "" and toolCallString != ""):
@@ -3203,10 +3255,22 @@ def sendRequest(no_std_out=False):
                 tempmessages = refreshSystemPrompt(tempmessages, args) #TODO refactor this together with the code around the line that says HORSE 
 
                 try:
-                    if (len(args.tools_array) == 0):
-                        retitem, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream))
+                    if args.tools_array is None or (len(args.tools_array) == 0):
+                        active_tools = getActiveTools()
+                        completion = send_chat_completion(
+                            messages=tempmessages,
+                            tools=active_tools if active_tools else None,
+                            force_tools=force_tools_flag
+                        )
+                        retitem, jsoncommand = printAiContent(completion, {}, args.stream)
                     else:
-                        retitem, jsoncommand = printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream, getActiveTools(), force_tools_flag))
+                        active_tools = getActiveTools()
+                        completion = send_chat_completion(
+                            messages=tempmessages,
+                            tools=active_tools if active_tools else None,
+                            force_tools=force_tools_flag
+                        )
+                        retitem, jsoncommand = printAiContent(completion, {}, args.stream)
                     if isinstance(retitem, list) and len(retitem) > 0:
                         ret = [retitem[0]]  # Take only the first item if it's a list
                     else:
@@ -3215,7 +3279,7 @@ def sendRequest(no_std_out=False):
 
                     if "respond" in json.dumps(ret[0]):
                         continue_processing = False
-                    elif len(jsoncommand) > 0:
+                    elif jsoncommand is not None and len(jsoncommand) > 0:
                         continue_processing = True
                     elif not JSONDetector.is_valid_json(json.dumps(ret[0])):
                         #print("No valid JSON command received. Ending processing.")
@@ -3223,6 +3287,7 @@ def sendRequest(no_std_out=False):
                 except Exception as e:
                     print(f"Error in AI chat completion: {str(e)}")
                     vdRet = 'SYSTEM: ERROR ' + str(e)
+                    print(traceback.format_exc())
                     continue_processing = False
 
             count += 1

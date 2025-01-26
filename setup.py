@@ -18,14 +18,13 @@ install_requires = [
     'watchdog==6.0.0',
     'rich',
     'tiktoken',
-    'gpt-cli',
+    'aisuite==0.1.7',
     'openai==1.54.4',
     'httpx==0.27.2'
 ]
 
 # Git dependencies
 dependency_links = [
-    'git+https://github.com/therealjuanmartinez/gpt-cli.git#egg=gptcli',
     'git+https://github.com/therealjuanmartinez/rich.git@master#egg=rich-13.9.4'
 ]
 
