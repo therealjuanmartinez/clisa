@@ -1599,6 +1599,9 @@ def init_assistantt(user_specified_model=None):
     global client
     global current_model
 
+    # Store the current model before reinitializing
+    previous_model = current_model
+
     client = Client()
     config = load_config()
     
@@ -1631,17 +1634,25 @@ def init_assistantt(user_specified_model=None):
                 return False
         return False
 
-    # Try user specified model first if it exists
+    # Try to initialize in this order:
+    # 1. User specified model (if provided)
+    # 2. Previous model (if exists)
+    # 3. Default model from config
+    # 4. Any available model
+
     if user_specified_model and get_valid_model_name(user_specified_model):
         if try_initialize_model(user_specified_model):
             return client
+    
+    if previous_model and get_valid_model_name(previous_model):
+        if try_initialize_model(previous_model):
+            return client
 
-    # Try default model from config if it exists
     default_model = get_valid_model_name(config['default_model'])
     if default_model and try_initialize_model(default_model):
         return client
 
-    # If both failed, try each model in order until one works
+    # If all else failed, try each model in order
     for provider in config['providers']:
         for model in config['providers'][provider]['models']:
             model_name = f"{provider}:{model['name']}"
@@ -1661,16 +1672,23 @@ def print_models(numbered_list=False):
     # Get the default model from config
     default_model = config['default_model']
     
+    # ANSI color codes
+    GREY = "\033[37m"
+    WHITE = "\033[97m"
+    YELLOW = "\033[33m"
+    ORANGE = "\033[38;5;208m"  # Using 256-color code for orange
+    RESET = "\033[0m"
+    
     if not numbered_list:
         for provider in config['providers']:
             for model in config['providers'][provider]['models']:
                 full_model_name = f"{provider}:{model['name']}"
                 indicators = []
                 if full_model_name == current_model:
-                    indicators.append("\033[32m(current)\033[0m")  # Green
+                    indicators.append(f"{YELLOW}(current){RESET}")
                 if full_model_name == default_model:
-                    indicators.append("\033[36m(default)\033[0m")  # Cyan
-                print(f"{provider}:{model['name']} {' '.join(indicators)}")
+                    indicators.append(f"{ORANGE}(default){RESET}")
+                print(f"{GREY}{provider}:{model['name']}{RESET} {' '.join(indicators)}")
     else:
         count = 1
         for provider in config['providers']:
@@ -1678,10 +1696,10 @@ def print_models(numbered_list=False):
                 full_model_name = f"{provider}:{model['name']}"
                 indicators = []
                 if full_model_name == current_model:
-                    indicators.append("\033[32m(current)\033[0m")  # Green
+                    indicators.append(f"{YELLOW}(current){RESET}")
                 if full_model_name == default_model:
-                    indicators.append("\033[36m(default)\033[0m")  # Cyan
-                print(f"{count}: {provider}:{model['name']} {' '.join(indicators)}")
+                    indicators.append(f"{ORANGE}(default){RESET}")
+                print(f"{WHITE}{count}{RESET}: {GREY}{provider}:{model['name']}{RESET} {' '.join(indicators)}")
                 count += 1
 
 #Enum for message types in tool processing
@@ -1718,15 +1736,19 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
     # Get default parameters
     params = config['default_params'].copy()
     
-    # Override with model-specific parameters if they exist
-    for provider_info in config['providers'].values():
+    # Override with model-specific parameters if they exist and track provider name
+    provider_name = None
+    for provider_key, provider_info in config['providers'].items():
         for model_info in provider_info['models']:
             if model_info['name'] == model_name:
+                provider_name = provider_key  # Store the provider name (anthropic/openai/xai/fireworks)
                 params.update({
-                    'temperature': model_info['temperature'],
+                    'temperature': model_info['temperature'], 
                     'stream': model_info['stream']
                 })
                 break
+        if provider_name:  # Exit outer loop if we found a match
+            break
     
     # Override with any custom parameters
     if custom_params:
@@ -1755,9 +1777,172 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
 
         if tool_definitions:
             api_params['tools'] = tool_definitions
-            api_params['tool_choice'] = "auto" if not force_tools else "force"
+            if provider_name is not None and provider_name == "anthropic":
+                # Format tools for Anthropic - using their custom schema format
+                tool_defs = []
+                for tool in tool_definitions:
+                    if isinstance(tool, dict):
+                        if 'function' in tool and 'custom' in tool and tool.get('type') == 'function':
+                            # Already in Anthropic format
+                            tool_defs.append(tool)
+                        elif 'function' in tool:
+                            # Convert from OpenAI format
+                            func = tool['function']
+                            tool_defs.append({
+                                'type': 'function',
+                                'function': {
+                                    'name': func['name'],
+                                    'description': func['description']
+                                },
+                                'custom': {
+                                    'input_schema': func['parameters']
+                                }
+                            })
+                        elif 'name' in tool and 'description' in tool and 'parameters' in tool:
+                            # Convert from simplified format to Anthropic format
+                            tool_defs.append({
+                                'type': 'function',
+                                'function': {
+                                    'name': tool['name'],
+                                    'description': tool['description']
+                                },
+                                'custom': {
+                                    'input_schema': tool['parameters']
+                                }
+                            })
+                api_params['tools'] = tool_defs
+                if tool_defs:  # Only set tool_choice if we have tools
+                    api_params['tool_choice'] = {"type": "auto"}
+            else:
+                api_params['tools'] = tool_definitions
+                api_params['tool_choice'] = "auto" if not force_tools else "force"
 
-        response = client.chat.completions.create(**api_params)
+        try:
+            response = client.chat.completions.create(**api_params)
+        except Exception as e:
+            error_info = str(e)
+            if 'tools' in str(error_info).lower():  # Only generate debug file for tool-related errors
+                # Generate debug file directly
+                import os
+                from pathlib import Path
+                from datetime import datetime
+                
+                debug_dir = Path(__file__).parent / "debug"
+                debug_dir.mkdir(exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                debug_file = debug_dir / f"tool_debug_{timestamp}.py"
+                
+                debug_code = f'''# Tool calling debug file generated at {datetime.now().isoformat()}
+# Error encountered: 
+{json.dumps({'error': str(e)}, indent=2)}
+# Provider: {provider_name}
+
+import json
+import os
+from aisuite import Client
+import traceback
+
+def get_available_tools():
+    """Return the tools configuration that caused the failure."""
+    # The tools are already in Python format, no need to parse JSON
+    tools = {json.dumps(api_params.get('tools', []))}
+    print("\\nOriginal tool definitions:")
+    print(json.dumps(tools, indent=2))
+    
+    # Handle Anthropic's tool format requirements
+    if "{provider_name}" == "anthropic":
+        print("\\nApplying Anthropic-specific formatting...")
+        # Format tools for Anthropic - using their custom schema format
+        tool_defs = []
+        for tool in tools:
+            if isinstance(tool, dict):
+                if 'function' in tool and 'custom' in tool and tool.get('type') == 'function':
+                    # Already in Anthropic format
+                    tool_defs.append(tool)
+                elif 'function' in tool:
+                    # Convert from OpenAI format
+                    func = tool['function']
+                    tool_defs.append({{
+                        'type': 'function',
+                        'function': {{
+                            'name': func['name'],
+                            'description': func['description']
+                        }},
+                        'custom': {{
+                            'input_schema': func['parameters']
+                        }}
+                    }})
+                elif 'name' in tool and 'description' in tool and 'parameters' in tool:
+                    # Convert from simplified format to Anthropic format
+                    tool_defs.append({{
+                        'type': 'function',
+                        'function': {{
+                            'name': tool['name'],
+                            'description': tool['description']
+                        }},
+                        'custom': {{
+                            'input_schema': tool['parameters']
+                        }}
+                    }})
+        print("\\nAnthropic-formatted tools:")
+        print(json.dumps(tool_defs, indent=2))
+        return tool_defs
+    return tools
+
+# Initialize the client
+client = Client()
+
+# The exact messages that caused the failure
+messages = {json.dumps(api_params['messages'], indent=4)}
+
+# The model that was being used
+model = "{api_params['model']}"
+
+# Get the tools that caused the failure
+tools = get_available_tools()
+
+print(f"\\nUsing model: {{model}}")
+print(f"Provider: {provider_name}")
+print(f"Final tool definitions:\\n{{json.dumps(tools, indent=2)}}")
+
+# Set up tool_choice based on provider and whether we have tools
+tool_choice = {{"type": "auto"}} if "{provider_name}" == "anthropic" and tools else None
+
+# Attempt to recreate the failure
+try:
+    api_call_params = {{
+        'model': model,
+        'messages': messages,
+        'stream': {str(api_params.get('stream', True))}
+    }}
+    
+    if tools:
+        api_call_params['tools'] = tools
+        if tool_choice:
+            api_call_params['tool_choice'] = tool_choice
+    
+    response = client.chat.completions.create(**api_call_params)
+    
+    if hasattr(response, '__iter__'):
+        # Handle streaming response
+        for chunk in response:
+            print(chunk)
+    else:
+        print(response)
+        
+except Exception as e:
+    print(f"\\nError reproduced: {{str(e)}}")
+    print("\\nFull traceback:")
+    print(traceback.format_exc())
+'''
+                
+                with open(debug_file, 'w') as f:
+                    f.write(debug_code)
+                
+                print(f"Debug file generated at: {debug_file}")
+            
+            raise  # Re-raise the exception after generating debug file
             
         # Handle streaming response - return immediately if streaming
         if 'openai.Stream' in str(type(response)): #TODO make this not depend on string matching
@@ -5858,14 +6043,6 @@ def main():
 
                     global assistantt
                     global config
-                    init_assistantt()
-                    from gptcli.assistant import (
-                    #from cloudassistant import (
-                        Assistant,
-                        DEFAULT_ASSISTANTS,
-                        AssistantGlobalArgs,
-                        init_assistant,
-                    )
                     init_assistantt()
                     print("Retrying...\n")
                 retryCount += 1
