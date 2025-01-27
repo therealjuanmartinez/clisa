@@ -1590,31 +1590,99 @@ def load_transcription_config():
     except:
         return None
 
-def init_assistantt():
+# Global variables at module level
+client = None
+current_model = None  # Track the actual current model
+
+def init_assistantt(user_specified_model=None):
     """Initialize the aisuite client with configuration"""
     global client
-    global default_model
-    
-    config = load_config()
-    client = Client()
-    
-    # Get the provider we need from default_model
-    default_provider = config['default_model'].split(':')[0]
-    
-    # Configure providers from config file
-    provider_config = {}
-    if default_provider in config['providers']:
-        settings = config['providers'][default_provider]
-        provider_config[default_provider] = {
-            key: os.environ.get(value) if key == 'api_key' else value
-            for key, value in settings.items()
-            if key != 'models'  # Exclude models list from client config
-        }
-    
-    client.configure(provider_config)
-    default_model = config['default_model']
-    return client
+    global current_model
 
+    client = Client()
+    config = load_config()
+    
+    def get_valid_model_name(model_name):
+        """Check if a model exists in config and return it if valid, otherwise return None"""
+        provider = model_name.split(':')[0]
+        if provider in config['providers']:
+            for model in config['providers'][provider]['models']:
+                if f"{provider}:{model['name']}" == model_name:
+                    return model_name
+        return None
+    
+    def try_initialize_model(model_name):
+        provider = model_name.split(':')[0]
+        if provider in config['providers']:
+            try:
+                provider_config = {
+                    provider: {
+                        key: os.environ.get(value) if key == 'api_key' else value
+                        for key, value in config['providers'][provider].items()
+                        if key != 'models'
+                    }
+                }
+                client.configure(provider_config)
+                global current_model
+                current_model = model_name
+                return True
+            except Exception as e:
+                print(f"Debug init: Failed to initialize {model_name}: {str(e)}")
+                return False
+        return False
+
+    # Try user specified model first if it exists
+    if user_specified_model and get_valid_model_name(user_specified_model):
+        if try_initialize_model(user_specified_model):
+            return client
+
+    # Try default model from config if it exists
+    default_model = get_valid_model_name(config['default_model'])
+    if default_model and try_initialize_model(default_model):
+        return client
+
+    # If both failed, try each model in order until one works
+    for provider in config['providers']:
+        for model in config['providers'][provider]['models']:
+            model_name = f"{provider}:{model['name']}"
+            if try_initialize_model(model_name):
+                return client
+
+    raise Exception("Failed to initialize any model")
+
+def print_models(numbered_list=False):
+    global current_model
+    config = load_config()
+    
+    # If current_model is None, set it to the default from config
+    if current_model is None:
+        current_model = config['default_model']
+    
+    # Get the default model from config
+    default_model = config['default_model']
+    
+    if not numbered_list:
+        for provider in config['providers']:
+            for model in config['providers'][provider]['models']:
+                full_model_name = f"{provider}:{model['name']}"
+                indicators = []
+                if full_model_name == current_model:
+                    indicators.append("\033[32m(current)\033[0m")  # Green
+                if full_model_name == default_model:
+                    indicators.append("\033[36m(default)\033[0m")  # Cyan
+                print(f"{provider}:{model['name']} {' '.join(indicators)}")
+    else:
+        count = 1
+        for provider in config['providers']:
+            for model in config['providers'][provider]['models']:
+                full_model_name = f"{provider}:{model['name']}"
+                indicators = []
+                if full_model_name == current_model:
+                    indicators.append("\033[32m(current)\033[0m")  # Green
+                if full_model_name == default_model:
+                    indicators.append("\033[36m(default)\033[0m")  # Cyan
+                print(f"{count}: {provider}:{model['name']} {' '.join(indicators)}")
+                count += 1
 
 #Enum for message types in tool processing
 class MessageType:
@@ -1638,13 +1706,13 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
         generator: yields chunks for streaming
     """
     global client
-    global default_model
+    global current_model
     
     # Load config for parameters
     config = load_config()
     
     # Get model to use
-    model_to_use = model or default_model
+    model_to_use = model or current_model
     provider, model_name = model_to_use.split(':')
     
     # Get default parameters
@@ -1722,12 +1790,15 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
         return None, None
 
 
-def print_models():
-    #for model in client.models.list():
-    #    print(model)
-    #print models.txt 
-    with open(os.path.dirname(os.path.realpath(__file__)) + "/models.txt", "r") as f:
-        print(f.read())
+def get_model_name_from_numbered_list(number):
+    config = load_config()
+    count = 1
+    for provider in config['providers']:
+        for model in config['providers'][provider]['models']:
+            if count == number:
+                return f"{provider}:{model['name']}"
+            count += 1
+    return None
 
 # list engines
 #engines = openai.Engine.list()
@@ -4823,13 +4894,16 @@ def main():
 
             # :m [model]
             if (len(myinput) > 3 and myinput[:3] == ":m "):
-                print("Model changed from "+args.model+" to: " + myinput[3:].strip())
-                args.model = myinput[3:].strip()
-                init_assistantt()  # Assuming this function initializes the assistant with the new model
+                model_name = get_model_name_from_numbered_list(int(myinput[3:].strip()))
+                print("Model changed from "+args.model+" to: " + model_name)
+                args.model = model_name
+                init_assistantt(args.model)  # Assuming this function initializes the assistant with the new model
                 myinput = ""
                 continue
             elif (len(myinput) >= 2 and myinput[:2] == ":m"):
-                print_models()
+                print()
+                print_models(True)
+                print()
                 myinput = ""
                 continue
 
