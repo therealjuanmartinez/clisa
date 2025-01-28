@@ -530,7 +530,7 @@ def getPreProcessedSystemMessage():
         for sysfile in args.sysfile.split(","):
             #now add .txt
             sysfile = sysfile + ".txt"
-            if (os.path.exists(BASE_DIR/"tools/sysfile/" + sysfile)):
+            if (os.path.exists(str(BASE_DIR/"tools/sysfile/") + sysfile)):
                 with open(BASE_DIR/"tools/sysfile/" + sysfile, 'r') as file:
                     setuptxt += file.read()
                     first = False
