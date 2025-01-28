@@ -153,6 +153,7 @@ commands = [
     {"command": ":vars", "description": "list role variables, or provide key=value,key2=value2 list after command to set",},
     {"command": ":hint", "description": "with role loaded, you can use this command followed by text for your hint to append to that role",},
     {"command": ":scribe", "description": "Connect/reconnect to the transcription server, making this instance the sole consumer of the REC+SEND button in the Android app",},
+    {"command": ":getconfig", "description": "Connect to user-specified URL to get config package (connects to [URL]/download and sends a password via POST such that it can be retrieved by the server as request.json.get('password') and the server should respond with a send_file(package.tar, as_attachment=True) - As of this time the server component is not published"},
     {"command": "image=", "description": "Deprecated? Uses image filename for vision prompt"},
     {"command": "images=", "description": "specify # of images along with prompt, will pull latest file(s) from /dev/shm/"},
 ]
@@ -1620,9 +1621,10 @@ def init_assistantt(user_specified_model=None):
             try:
                 provider_config = {
                     provider: {
-                        key: os.environ.get(value) if key == 'api_key' else value
-                        for key, value in config['providers'][provider].items()
-                        if key != 'models'
+                        'api_key': config['providers'][provider].get('api_key_value', None) or 
+                                 os.environ.get(config['providers'][provider]['api_key']),
+                        **{k:v for k,v in config['providers'][provider].items() 
+                           if k not in ['api_key', 'api_key_value', 'models']}
                     }
                 }
                 client.configure(provider_config)
@@ -1821,7 +1823,7 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
             response = client.chat.completions.create(**api_params)
         except Exception as e:
             error_info = str(e)
-            if 'tools' in str(error_info).lower():  # Only generate debug file for tool-related errors
+            if 'tools' in str(error_info).lower():  # Only generate debug file for tool-related errors TODO remove this
                 # Generate debug file directly
                 import os
                 from pathlib import Path
@@ -4852,6 +4854,83 @@ def main():
                 myinput = ""
                 continue
 
+            if myinput.strip().startswith(":clearconfig"):
+                #are you sure
+                print("Are you sure you want to delete your configuration? (y/n)")
+                response = input()
+                if response == "y":
+                    os.remove(BASE_DIR/"config.json")
+                    print("configuration deleted")
+                    myinput = ""
+                    continue
+
+            if myinput.strip().startswith(":getconfig"):
+                #get URL from user
+                url = input("Enter URL: ")
+                #get password from user w/o echo
+                import getpass
+                password = getpass.getpass("Enter password: ")  
+
+                #now build up the request as per the helpdoc
+                request = {
+                    "password": password
+                }
+                #send request to URL
+                response = requests.post(url + "/download", json=request)
+                # Write response content to file
+                if response.status_code == 200:
+
+
+                    # First write the tar file
+                    with open(BASE_DIR/"package.tar", "wb") as f:
+                        f.write(response.content)
+                        print("Tar file written to " + os.path.abspath(BASE_DIR/"package.tar"))
+                    
+                    # Then extract it
+                    import tarfile
+                    with tarfile.open(BASE_DIR/"package.tar", "r:*") as tar:
+                        tar.extractall(path=BASE_DIR)
+                        #list all files in the package directory
+                    
+                    #print("Files extracted to " + os.path.abspath(BASE_DIR/"package"))
+                    #print("Files in package directory:")
+                    #print(os.listdir(BASE_DIR/"package"))
+                    
+                    # Clean up the tar file
+                    os.remove(BASE_DIR/"package.tar")
+
+                    #at this point we need to modify the config.json file itself.  
+                    # Load and modify the config.json file
+                    with open(BASE_DIR/"package/config.json", "r") as f:
+                        config = json.load(f)
+
+                    # For each .key file found, update the corresponding provider's api_key_value
+                    for file in os.listdir(BASE_DIR/"package"):
+                        if file.endswith(".key"):
+                            api_key_name = file.split(".")[0].lower()  # Convert to lowercase to match provider names
+                            with open(str(BASE_DIR/"package") + "/" + file, "r") as f:
+                                api_key = f.read().strip()
+                                
+                            # If provider exists in config, as identified by provider->api_key in the json, add/update api_key_value to config.json
+                            for provider in config["providers"]:
+                                if config["providers"][provider]["api_key"].upper() == api_key_name.upper():
+                                    config["providers"][provider]["api_key_value"] = api_key
+                                    print("Configured key for " + api_key_name)
+
+                    # Write the modified config back to file
+                    with open(BASE_DIR/"package/config.json", "w") as f:
+                        json.dump(config, f, indent=4)
+
+                    os.rename(BASE_DIR/"package/config.json", BASE_DIR/"config.json")
+                    print("File updated. Location: " + os.path.abspath(BASE_DIR/"config.json") + "\n")
+
+                    init_assistantt()
+                else:
+                    print(f"Error: Server returned status code {response.status_code}")
+
+                myinput = ""
+                continue
+
             if myinput.strip().startswith(":scribe"):
                 #check for interrupt_thread is alive or existing
                 if interrupt_thread.is_alive():
@@ -6046,7 +6125,7 @@ def main():
                     #    })
 
                     global assistantt
-                    global config
+                    #global config
                     init_assistantt()
                     print("Retrying...\n")
                 retryCount += 1
