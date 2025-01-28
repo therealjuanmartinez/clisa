@@ -3135,14 +3135,18 @@ def sendRequest(no_std_out=False):
                 jo = json.loads(jsoncommand)
                 #get tool_call name
                 first = False
-                for j in jo:
-                    if 'tool_call' in j: 
-                        toolName = str(j['tool_call'])
-                        arguments = json.dumps(j['arguments'])
-                        if first:
-                            toolCallString += ", "
-                        toolCallString += toolName + ": " + arguments
-                        first = True
+                try:
+                    for j in jo:
+                        if 'tool_call' in j: 
+                            toolName = str(j['tool_call'])
+                            arguments = json.dumps(j['arguments'])
+                            if first:
+                                toolCallString += ", "
+                            toolCallString += toolName + ": " + arguments
+                            first = True
+                except:
+                    #TODO we really should just decide whether jo is iterable
+                    pass
             #if (toolCallString != ""):
             #    toolCallString = "LLM Called Tool(s): " + toolCallString 
 
