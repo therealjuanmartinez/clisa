@@ -530,18 +530,15 @@ def getPreProcessedSystemMessage():
     #check for --sysfile
     if (args.sysfile is not None): #it may be multiple files
         for sysfile in args.sysfile.split(","):
-            #now add .txt
-            sysfile = sysfile + ".txt"
-            if (os.path.exists(str(BASE_DIR/"tools/sysfile/") + sysfile)):
-                with open(BASE_DIR/"tools/sysfile/" + sysfile, 'r') as file:
+            if (os.path.exists(sysfile)):
+                with open(sysfile, 'r') as file:
                     setuptxt += file.read()
                     first = False
     if (args.sysfile_edit is not None): #it may be multiple files
         for sysfile in args.sysfile_edit.split(","):
-            sysfile = sysfile + ".txt"
-            if (os.path.exists(BASE_DIR/"tools/sysfile/" + sysfile)):
+            if (os.path.exists(sysfile)):
                 #edit it in vi
-                os.system("vi " + BASE_DIR/"tools/sysfile/" + sysfile)
+                os.system("vi " + sysfile)
         sys.exit(0)
 
     if (args.system != ""):
