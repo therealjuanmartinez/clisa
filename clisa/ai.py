@@ -154,6 +154,7 @@ commands = [
     {"command": ":hint", "description": "with role loaded, you can use this command followed by text for your hint to append to that role",},
     {"command": ":scribe", "description": "Connect/reconnect to the transcription server, making this instance the sole consumer of the REC+SEND button in the Android app",},
     {"command": ":getconfig", "description": "Connect to user-specified URL to get config package (connects to [URL]/download and sends a password via POST such that it can be retrieved by the server as request.json.get('password') and the server should respond with a send_file(package.tar, as_attachment=True) - As of this time the server component is not published"},
+    {"command": ":clearkeys", "description": "Clear all API keys in config"},
     {"command": "image=", "description": "Deprecated? Uses image filename for vision prompt"},
     {"command": "images=", "description": "specify # of images along with prompt, will pull latest file(s) from /dev/shm/"},
 ]
@@ -4854,15 +4855,22 @@ def main():
                 myinput = ""
                 continue
 
-            if myinput.strip().startswith(":clearconfig"):
+            if myinput.strip().startswith(":clearkeys"):
                 #are you sure
-                print("Are you sure you want to delete your configuration? (y/n)")
+                print("Are you sure you want to clear keys? (y/n)")
                 response = input()
                 if response == "y":
-                    os.remove(BASE_DIR/"config.json")
-                    print("configuration deleted")
+                    #open the config.json file, and clear the api_key_value for each provider
+                    with open(BASE_DIR/"config.json", "r") as f:
+                        config = json.load(f)
+                    for provider in config["providers"]:
+                        config["providers"][provider]["api_key_value"] = ""
+                        print("Cleared key for " + provider)
+                    with open(BASE_DIR/"config.json", "w") as f:
+                        json.dump(config, f, indent=4)
+                    print("Keys cleared\n")
                     myinput = ""
-                    continue
+                    continue    
 
             if myinput.strip().startswith(":getconfig"):
                 #get URL from user
