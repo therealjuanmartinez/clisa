@@ -3586,7 +3586,7 @@ def sendRequest(no_std_out=False):
 
                     if "respond" in json.dumps(ret[0]):
                         continue_processing = False
-                    elif jsoncommand is not None and len(jsoncommand) > 0:
+                    elif jsoncommand is not None and len(jsoncommand) > 0 and jsoncommand != "null":
                         continue_processing = True
                     elif not JSONDetector.is_valid_json(json.dumps(ret[0])):
                         #print("No valid JSON command received. Ending processing.")
