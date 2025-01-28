@@ -1,4 +1,5 @@
 from setuptools import setup, find_packages
+import sys
 
 # Regular PyPI dependencies
 install_requires = [
@@ -22,6 +23,10 @@ install_requires = [
     'openai==1.54.4',
     'httpx==0.27.2'
 ]
+
+# Add importlib-metadata for Python < 3.8
+if sys.version_info < (3, 8):
+    install_requires.append('importlib-metadata>=1.0')
 
 # Git dependencies
 dependency_links = [
