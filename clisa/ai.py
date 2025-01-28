@@ -2496,10 +2496,12 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
                 tool_calls = []  # List to store all tool calls
                 for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
+                    message_type = None #TODO investigate why SOMETIMES chunk is not a tuple, because this was being revealed before this line was placed here 
                     commandflag = False
                     if isinstance(chunk, tuple):
                         value, message_type = chunk
                         chunk = value
+
 
                     if message_type == MessageType.TOOLNAME:
                         #if we have a previous tool_name and valid args, add them to tool_calls
