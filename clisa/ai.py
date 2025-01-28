@@ -472,10 +472,11 @@ def display_help():
 
     #now add the colon commands, no color
     for item in colon_command_modules:
-        table.add_row(
-            f":{item.command_names()[0]}",
-            f"{item.descriptions()[0]}"
-        )
+        for cmd, desc in zip(item.command_names(), item.descriptions()):
+            table.add_row(
+                f":{cmd}",
+                f"{desc}"
+            )
 
     console.print(table)
     print()
@@ -2589,7 +2590,8 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
             lastMessage = lastMessage.split("RESPONSE:")[1].strip()
             #now check if it is valid JSON
 
-        live.update(Markdown(response, style="green", code_theme="rrt", code_padding=0))
+        #live.update(Markdown(response, style="green", code_theme="rrt", code_padding=0))
+        live.update(Markdown(response, style="green", code_theme="rrt"))#, code_padding=0))
         live.refresh()
         if interrupt_handled.is_set():
             interrupt_handled.clear()
