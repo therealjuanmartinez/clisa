@@ -1986,6 +1986,15 @@ def get_model_name_from_numbered_list(number):
             count += 1
     return None
 
+def get_model_name_from_list(model_name):
+    config = load_config()
+    for provider in config['providers']:
+        for model in config['providers'][provider]['models']:
+            name_with_provider = provider.lower().replace("_APY_KEY","") + ":" + model['name'].lower()
+            if model_name.lower() in name_with_provider:
+                return f"{provider}:{model['name']}"
+    return None
+
 # list engines
 #engines = openai.Engine.list()
 
@@ -3983,6 +3992,12 @@ def main():
     if (args.onlytools):
         force_tools_flag = True
 
+    if (args.model):
+        model_name = get_model_name_from_list(args.model)
+        if model_name is not None:
+            args.model = model_name
+            init_assistantt(args.model)  # Assuming this function initializes the assistant with the new model
+
     if (args.sysfile_list):
         print()
         # Get the list of .txt files in the specified directory, ordered by alphabetical order
@@ -4900,6 +4915,7 @@ def main():
                     with tarfile.open(BASE_DIR/"package.tar", "r:*") as tar:
                         tar.extractall(path=BASE_DIR)
                         #list all files in the package directory
+
                     
                     #print("Files extracted to " + os.path.abspath(BASE_DIR/"package"))
                     #print("Files in package directory:")
@@ -5169,12 +5185,19 @@ def main():
                     except: 
                         print("Invalid number of messages to write") 
 
-            # :m [model]
+            # :m [model] - accepts either model number or name
             if (len(myinput) > 3 and myinput[:3] == ":m "):
-                model_name = get_model_name_from_numbered_list(int(myinput[3:].strip()))
-                print("Model changed from "+args.model+" to: " + model_name)
-                args.model = model_name
-                init_assistantt(args.model)  # Assuming this function initializes the assistant with the new model
+                #is it a numeral
+                if (myinput[3:].strip().isdigit()):
+                    model_name = get_model_name_from_numbered_list(int(myinput[3:].strip()))
+                else:
+                    model_name = get_model_name_from_list(myinput[3:].strip())
+                if model_name is None:
+                    print("\nModel not found\n")
+                else:
+                    print("\nModel changed from "+args.model+" to: " + model_name + "\n")
+                    args.model = model_name
+                    init_assistantt(args.model)  # Assuming this function initializes the assistant with the new model
                 myinput = ""
                 continue
             elif (len(myinput) >= 2 and myinput[:2] == ":m"):
