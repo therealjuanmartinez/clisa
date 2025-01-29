@@ -539,7 +539,7 @@ def getPreProcessedSystemMessage():
         for sysfile in args.sysfile_edit.split(","):
             if (os.path.exists(sysfile)):
                 #edit it in vi
-                os.system("vi " + sysfile)
+                subprocess.run(['vi', sysfile])
         sys.exit(0)
 
     if (args.system != ""):
@@ -1189,7 +1189,7 @@ def get_role_file(role_name):
 def edit_role(role_name):
         thfile = get_role_file(role_name)
         current_time = datetime.datetime.now().timestamp()
-        os.system('vi ' + thfile)
+        subprocess.run(['vi', thfile])
         last_modified = os.path.getmtime(thfile)
 
         if last_modified < current_time:
@@ -4057,7 +4057,7 @@ def main():
 
     if args.role_edit: #open role file, allow editing, then exit
         rfile = get_role_file(args.role_edit)
-        os.system('vi ' + rfile)
+        subprocess.run(['vi', rfile])
         sys.exit(0)
 
 
@@ -4484,7 +4484,7 @@ def main():
                                 myinput = ""
                             if (messages[len(messages)-1]['role'] == "user"):
                                 messages.pop()
-                            os.system('vi {}'.format("/dev/shm/convo.input"))
+                            subprocess.run(['vi', "/dev/shm/convo.input"])
                             #attempt to read /dev/shm/convo.input into myinput
                             try:
                                 with open("/dev/shm/convo.input", "r") as f:
@@ -4754,7 +4754,7 @@ def main():
                 """
                 myinput = ""
                 outputConversationToFile("/dev/shm/convo.json")
-                os.system('vi {}'.format("/dev/shm/convo.json"))
+                subprocess.run(['vim', "/dev/shm/convo.json"])
                 try:
                     messages = getMessagesFromFile("/dev/shm/convo.json")
                     #is last message from user
@@ -4831,7 +4831,7 @@ def main():
                     with open("/dev/shm/convo.input", "w") as f:
                         f.write(messages[len(messages)-1]['content'])
                     messages.pop()
-                os.system('vi {}'.format("/dev/shm/convo.input"))
+                subprocess.run(['vi', "/dev/shm/convo.json"])
                 #attempt to read /dev/shm/convo.input into myinput
                 os.system('reset')
                 try:
@@ -5250,7 +5250,7 @@ def main():
                 with open("/dev/shm/delme", "w") as f:
                     msg = replace_bash_commands(msg).strip()
                     f.write(msg)
-                os.system('vi {}'.format("/dev/shm/delme"))
+                subprocess.run(['vi', "/dev/shm/delme"])
                 #attempt to read /dev/shm/convo.input into myinput
                 try:
                     with open("/dev/shm/delme", "r") as f:
@@ -5315,7 +5315,7 @@ def main():
                             f.write(messages[-2]['content'])
 
                         # Open vi (consider using subprocess for better handling)
-                        os.system('vi /dev/shm/lusertemp')
+                        subprocess.run(['vi', "/dev/shm/lusertemp"])
 
                         # Read the file back into myinput
                         with open("/dev/shm/lusertemp", "r", encoding='utf-8') as f:
@@ -5360,7 +5360,7 @@ def main():
                         with open("/dev/shm/lusertemp", "w") as f:
                             f.write(messages[-2]['content'])
                         #open vi
-                        os.system('vi {}'.format("/dev/shm/lusertemp"))
+                        subprocess.run(['vi', "/dev/shm/lusertemp"])
                         #read the file back into myinput
                         with open("/dev/shm/lusertemp", "r") as f:
                             filetext = f.read()
@@ -5859,7 +5859,7 @@ def main():
 
                 #amit praveen kumar has moved to another project.  akshata is coming in 
 
-                os.system('vi /dev/shm/convo.input')
+                subprocess.run(['vi', "/dev/shm/convo.input"])
                 # Attempt to read /dev/shm/convo.input into myinput
                 try:
                     with open("/dev/shm/convo.input", "r") as f:
