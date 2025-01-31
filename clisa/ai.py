@@ -4026,7 +4026,7 @@ def encode_image(image_path):
 
         
 def main():
-    global args, force_tools_flag  # Add force_tools_flag here
+    global args, force_tools_flag, colon_command_modules, current_conversation_title, currFileName  # Add all globals here
     args = parser.parse_args()
     loadColonStrings()
     loadColonCommands()
@@ -4819,8 +4819,10 @@ def main():
                         for action_result in action_results:
                             if action_result.action == Action.SET_CONVERSATION_TITLE:
                                 # Store the title for later use in filenames
-                                global current_conversation_title
                                 current_conversation_title = action_result.value
+                            elif action_result.action == Action.SET_CURRENT_FILE:
+                                # Update the current file name
+                                currFileName = action_result.value
                         
                         ran_command = True
                         break

@@ -7,6 +7,7 @@ class Action(Enum):
 	REFRESH_COLON_FILES = 3
 	NO_ACTION = 2
 	SET_CONVERSATION_TITLE = 4  # New action for setting terminal title
+	SET_CURRENT_FILE = 5  # New action for setting the current file name
 
 class ActionResult:
 	def __init__(self, action: Action, value: Any = None):
