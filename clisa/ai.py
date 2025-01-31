@@ -4286,10 +4286,24 @@ def main():
     #gotAnyRequestResult = False
 
     files_cursor = 0 
+
+    # Create a full copy of messages that will be our source of truth for navigation
+    messagesCopy = []
+    for item in messages:
+        messagesCopy.append(item)
+
     if (args.last_conversation) and not args.oneshot:
         messages = getMessagesFromFile(files[files_cursor])
+        # Update messagesCopy with new messages
+        messagesCopy = []
+        for item in messages:
+            messagesCopy.append(item)
     elif args.last_conversation and args.oneshot:
         messages = getMessagesFromFile(files[files_cursor])
+        # Update messagesCopy with new messages
+        messagesCopy = []
+        for item in messages:
+            messagesCopy.append(item)
         
 
     #add prompt
@@ -4460,10 +4474,12 @@ def main():
                             the conversation from there.
                             """
                             minMessages = 3 if hasSystemMessage else 2
-                            if (len(messages) + messages_cursor > minMessages): #AI bug at this point, messageCopy should be opuplated but it's really not, other than system message, when having left-arrowed to a historical file
+                            if (len(messagesCopy) + messages_cursor > minMessages):
                                 messages_cursor -= 2
-                                messages.pop()
-                                messages.pop()
+                                # Reset messages to be a copy up to the current cursor position
+                                messages = []
+                                for i in range(len(messagesCopy) + messages_cursor):
+                                    messages.append(messagesCopy[i])
                                 print("\033[2J\033[1;1H") #clear screen
                                 printMessagesToScreen(False, True)
                                 print()
