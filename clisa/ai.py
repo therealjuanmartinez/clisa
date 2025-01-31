@@ -82,6 +82,7 @@ import jsonschema
 from jsonschema import validate
 
 from clisa.role import Role  # Make sure this import is at the top of ai.py
+from clisa.colon_tools.base_colon_command import Action  # Import Action enum
 
 #AI TODO we need to add the feature such that when we use new feature :XXXXX it also disables {{}}
 
@@ -91,6 +92,7 @@ TOOLS_TOP_DIR=BASE_DIR/"tools"
 files_cursor = 0
 tool_instances = []  # Global array to hold instances of tools
 force_tools_flag = False  # Add this line here
+current_conversation_title = None  # Global variable to store the current conversation title
 #AI a good place to add globals
 
 homedir = os.path.expanduser("~")
@@ -112,6 +114,7 @@ commands = [
     {"command": ":bash", "description": "drop to bash prompt for a moment"},
     {"command": ":add", "description": "erase last assistant message, append any text after ':add' to the end of the last user message, and re-send"},
     {"command": ":redo", "description": "erase last assistant message, edit previous message, and re-send. (or type text after ':redo' and that text becomes the new redo message. if you change your mind, exit editor w/o changes)"},
+    {"command": ":refresh", "description": "re-print conversation to the terminal"},
     {"command": ":r", "description": "respond to the response using same model, or specify model optionally to respond with"},
     {"command": ":multi", "description": "multiline mode for text entry, press CTRL+D when done"},
     {"command": ":wc", "description": "save last assistant message to colon file (provide colon name)"},
@@ -1618,14 +1621,24 @@ def init_assistantt(user_specified_model=None):
         provider = model_name.split(':')[0]
         if provider in config['providers']:
             try:
-                provider_config = {
-                    provider: {
-                        'api_key': config['providers'][provider].get('api_key_value', None) or 
-                                 os.environ.get(config['providers'][provider]['api_key']),
-                        **{k:v for k,v in config['providers'][provider].items() 
-                           if k not in ['api_key', 'api_key_value', 'models']}
+                if provider == "ollama":
+                    provider_config = {
+                            provider: {
+                                'api_url': config['providers'][provider].get('api_url', None) or 
+                                os.environ.get(config['providers'][provider]['api_url']),
+                                **{k:v for k,v in config['providers'][provider].items() 
+                                if k not in ['api_url', 'models']}
+                            }
                     }
-                }
+                else:
+                    provider_config = {
+                        provider: {
+                            'api_key': config['providers'][provider].get('api_key_value', None) or 
+                                    os.environ.get(config['providers'][provider]['api_key']),
+                            **{k:v for k,v in config['providers'][provider].items() 
+                            if k not in ['api_key', 'api_key_value', 'models']}
+                        }
+                    }
                 client.configure(provider_config)
                 global current_model
                 current_model = model_name
@@ -1732,7 +1745,10 @@ def send_chat_completion(messages, model=None, custom_params=None, tools=None, f
     
     # Get model to use
     model_to_use = model or current_model
-    provider, model_name = model_to_use.split(':')
+    #provider = model_to_use.split(':')[0]
+    #now model_name shoudl be the rest of the string, keeping in mind there could be more than one colon
+    model_name = model_to_use.split(':')[1:]
+    model_name = ':'.join(model_name)
     
     # Get default parameters
     params = config['default_params'].copy()
@@ -2075,7 +2091,7 @@ def check_for_interrupt(force=False, scribe_config=None):
     METADATA = generate_remote_control_json()
 
     try:
-        sock.connect((host, port))
+        sock.connect((host, int(port)))
         printYellowStderr(f"Connected to {host}:{port}")
 
         # Send metadata to the server
@@ -2291,7 +2307,10 @@ def get_files_collection(searchterm = None, do_not_insert_new_conversation = Tru
 def outputConversationToFile(file=None, unprocessedUserMessage=None, print_file_info=False):
     """
     Output the conversation to a file, optionally appending the user's message. JSON format.
+    The newest file will always be TITLE.json, with older versions as TITLE.1.json, TITLE.2.json, etc.
+    All conversation files are saved in ~/conversations/ unless an absolute path is provided.
     """
+    global current_conversation_title
     messagesCopy = []
     for message in messages:
         messagesCopy.append(message)
@@ -2302,25 +2321,61 @@ def outputConversationToFile(file=None, unprocessedUserMessage=None, print_file_
         })
     if not os.path.exists(conversationDirectory):
         os.mkdir(conversationDirectory)
-    filename = file
-    if filename is None or len(filename.strip()) == 0:
-        filename = datetime.datetime.now(tz=datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S') + ".json"
-    convoString = json.dumps(messagesCopy, indent=4)
-    if file is None:
-        directory=conversationDirectory
+
+    # Handle filename generation
+    if file is None or len(file.strip()) == 0:
+        # Use conversation title if available, otherwise use timestamp
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')
+        if current_conversation_title:
+            safe_title = re.sub(r'[^\w\-\.]', '_', current_conversation_title)
+            filename = f"{safe_title}.json"
+        else:
+            filename = f"{timestamp}.json"
     else:
-        directory=""
-        #the file may already have a directory in it. but if not, we need to get current directory
-        if (not "/" in file):
-            directory = os.getcwd() + "/"
-    with open(directory+filename, "w") as f:
-        #convert messages to a json string with nice newlines and all
+        # If it's an absolute path, use it as is
+        if os.path.isabs(file) or file.startswith('/dev/shm/'):
+            full_path = file
+            filename = os.path.basename(file)
+        else:
+            # For relative paths, force it to be in the conversations directory
+            filename = os.path.basename(file)
+            full_path = os.path.join(conversationDirectory, filename)
+    
+    # If not an absolute path, use conversations directory
+    try:
+        if not os.path.isabs(full_path) and not full_path.startswith('/dev/shm/'):
+            full_path = os.path.join(conversationDirectory, filename)
+    except: #for when full_path hasn't been defined. TODO make this better.
+        full_path = os.path.join(conversationDirectory, filename)
+    
+    base_path = os.path.splitext(full_path)[0]  # Get path without .json extension
+
+    # If the target file already exists, rotate the files
+    if os.path.exists(full_path):
+        # Find the highest numbered backup
+        existing_files = glob.glob(f"{base_path}.[0-9]*.json")
+        max_number = -1
+        for existing_file in existing_files:
+            match = re.search(r'\.(\d+)\.json$', existing_file)
+            if match:
+                max_number = max(max_number, int(match.group(1)))
+        
+        # Rotate files from highest number to lowest
+        for i in range(max_number + 1, 0, -1):
+            old_file = f"{base_path}.{i-1}.json"
+            new_file = f"{base_path}.{i}.json"
+            if i == 1 and os.path.exists(full_path):
+                os.rename(full_path, new_file)
+            elif os.path.exists(old_file):
+                os.rename(old_file, new_file)
+
+    # Write the new content to the main file
+    convoString = json.dumps(messagesCopy, indent=4)
+    with open(full_path, "w") as f:
         f.write(convoString + "\n")
     
     if print_file_info:
-        printGrey("\nWrote conversation to file: " + directory+filename + "\n")
-        #print entire stack trace 
-        #printGrey("Stack trace: " + ''.join(traceback.format_stack()))
+        printGrey("\nWrote conversation to file: " + full_path + "\n")
     
     return filename
 
@@ -3943,7 +3998,7 @@ def process_mission():
     # Return the task details string
     return task_details.strip()
 
-def refreshUI(thefiles=[], show_file_info=False):
+def refreshUI_from_last_file(thefiles=[], show_file_info=False):
     """
     Refreshes the UI with the content of messages from the last file in thefiles
     TODO: probably refactor this out - it seems to only be used the first time
@@ -3960,6 +4015,7 @@ def refreshUI(thefiles=[], show_file_info=False):
     if (show_file_info):
         print('7 refresh ui')
         printFileInformationLine(files[0])
+
 
 #AI bug :remresp isn't always working or the command isn't getting hit
 
@@ -4731,7 +4787,15 @@ def main():
                         #call the command
                         cursor_location = len(messages)
                         max_messages = 10000
-                        module.execute(command_name, words_after_command, messages, cursor_location, max_messages) #run the colon command
+                        messages, cursor_location, action_results = module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
+                        
+                        # Process action results
+                        for action_result in action_results:
+                            if action_result.action == Action.SET_CONVERSATION_TITLE:
+                                # Store the title for later use in filenames
+                                global current_conversation_title
+                                current_conversation_title = action_result.value
+                        
                         ran_command = True
                         break
                 if ran_command:
@@ -5081,7 +5145,7 @@ def main():
                 else:
                     matchedfiles = get_files_collection(myinput[2:].strip())
                 #dlog("found a total of " + str(len(matchedfiles)-1) + " files matching " + myinput[2:])
-                refreshUI(matchedfiles, True)
+                refreshUI_from_last_file(matchedfiles, True)
                 # Make terminal print yellow
                 files_cursor = 0
                 printYellow("Found " + str(len(matchedfiles)) + " files matching '" + myinput[2:].strip() + "'\n")
@@ -5339,7 +5403,15 @@ def main():
                     messages.pop()
 
                 # Print messages to screen
-                printMessagesToScreen(True, False, "Input>>" + myinput)
+                printMessagesToScreen(True, False, "bInput>>" + myinput)
+
+                
+                
+            if myinput.strip() == ":refresh":
+                printMessagesToScreen(True, False)
+                print()
+                myinput = ""
+                continue
 
 
             #:redo (same as :add but doesn't append to last user message, overwrites it)

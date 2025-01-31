@@ -1,11 +1,17 @@
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Tuple, Any, Optional
 
 class Action(Enum):
 	REFRESH_MESSAGES = 1
 	REFRESH_COLON_FILES = 3
 	NO_ACTION = 2
+	SET_CONVERSATION_TITLE = 4  # New action for setting terminal title
+
+class ActionResult:
+	def __init__(self, action: Action, value: Any = None):
+		self.action = action
+		self.value = value
 
 class BaseColonCommand(ABC):
 	def __init__(self, command: str, text: str, messages: List[dict], cursor_location: int, max_messages: int):
@@ -17,7 +23,7 @@ class BaseColonCommand(ABC):
 
 	@staticmethod
 	@abstractmethod
-	def execute(command: str, text: str, messages: List[dict], cursor_location: int, max_messages: int) -> Tuple[List[dict], int, List[Action]]:
+	def execute(command: str, text: str, messages: List[dict], cursor_location: int, max_messages: int) -> Tuple[List[dict], int, List[ActionResult]]:
 		pass
 	
 	@staticmethod
@@ -32,9 +38,9 @@ class BaseColonCommand(ABC):
 
 class CustomCommand(BaseColonCommand):
 	@staticmethod
-	def execute(command: str, text: str, messages: List[dict], cursor_location: int, max_messages: int) -> Tuple[List[dict], int, List[Action]]:
+	def execute(command: str, text: str, messages: List[dict], cursor_location: int, max_messages: int) -> Tuple[List[dict], int, List[ActionResult]]:
 		print(f"Executing command: {command} with text: {text}")
-		actions = [Action.REFRESH_MESSAGES]
+		actions = [ActionResult(Action.REFRESH_MESSAGES)]
 		return messages, cursor_location, actions
 	
 	@staticmethod
