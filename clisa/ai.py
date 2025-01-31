@@ -4285,29 +4285,39 @@ def main():
     paste = False
     #gotAnyRequestResult = False
 
-    files_cursor = 0 
+    files_cursor = 1 if args.last_conversation else 0  # Start at 1 for last_conversation to match left arrow behavior
 
     # Create a full copy of messages that will be our source of truth for navigation
     messagesCopy = []
     for item in messages:
         messagesCopy.append(item)
 
-    if (args.last_conversation) and not args.oneshot:
-        messages = getMessagesFromFile(files[files_cursor])
-        # Update messagesCopy with new messages
-        messagesCopy = []
-        for item in messages:
-            messagesCopy.append(item)
-    elif args.last_conversation and args.oneshot:
-        messages = getMessagesFromFile(files[files_cursor])
-        # Update messagesCopy with new messages
-        messagesCopy = []
-        for item in messages:
-            messagesCopy.append(item)
-        
+    if args.last_conversation:
+        try:
+            messages = getMessagesFromFile(files[files_cursor])
+            # Update messagesCopy with new messages
+            messagesCopy = []
+            for item in messages:
+                messagesCopy.append(item)
+            
+            # If we have a prompt and we're loading the last conversation,
+            # append it as a user message
+            if args.prompt and args.prompt.strip():
+                messages.append({
+                    "role": "user",
+                    "content": args.prompt
+                })
+                messagesCopy.append({
+                    "role": "user",
+                    "content": args.prompt
+                })
+            currFileName = files[files_cursor]  # Update currFileName to match the loaded conversation
+        except Exception as e:
+            print("Error loading last conversation:", str(e))
+            files_cursor = 0  # Reset to current if failed to load last
 
     #add prompt
-    if (args.prompt != "" and not args.procimage):
+    elif (args.prompt != "" and not args.procimage):
         messages.append({
             "role": "user",
             "content": args.prompt
