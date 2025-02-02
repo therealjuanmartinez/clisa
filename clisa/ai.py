@@ -4817,10 +4817,10 @@ def main():
                         
                         # Process action results
                         for action_result in action_results:
-                            if action_result.action == Action.SET_CONVERSATION_TITLE:
+                            if action_result == Action.SET_CONVERSATION_TITLE:
                                 # Store the title for later use in filenames
                                 current_conversation_title = action_result.value
-                            elif action_result.action == Action.SET_CURRENT_FILE:
+                            elif action_result == Action.SET_CURRENT_FILE:
                                 # Update the current file name
                                 currFileName = action_result.value
                         
