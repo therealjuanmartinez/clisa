@@ -6199,8 +6199,13 @@ def main():
                             os.system("chmod +x " + args.outputcodefile)
                         os._exit(0)
                     else:
-                        completion = sendRequest() #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
                         try:
+                            completion = sendRequest() #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
+                        #now handle keyboard interrupt
+                        except KeyboardInterrupt:
+                            #so actually we need to interrupt the sendRequest(), but all this does is keep the program from exiting when trying to cancel a request that is pending to the LLM 
+                            continue
+                        except Exception as e:
                             if isinstance(completion, list):
                                 completion = completion[0]
                         except:
