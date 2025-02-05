@@ -682,7 +682,7 @@ def file_to_json_string(filename):
 def getAllToolsFromDirectory(dirs = []): #Similar to refreshTools, but this one only returns an array of tools and does not affect args
 #is args tools just called out but no value given
 
-    from clisa.tools.tool_base import ToolBase
+    #from clisa.base.tool_base import ToolBase
     import importlib.util
     import inspect
     global args
@@ -822,10 +822,10 @@ def setToolsArray(myarray):
 
 def refreshToolsRecursive(dirs=[TOOLS_TOP_DIR], force_to_active=False): #AI TODO, i think the need for this function is slightly overblown and we should remove/reduce it at some point. we are keeping instances of tools in tool_instances and this doesn't do much once those instances are created
 
-    try:
-        from clisa.tools.tool_base import ToolBase
-    except:
-        return
+    #try:
+    #    from clisa.base.tool_base import ToolBase
+    #except:
+    #    return
     import importlib.util
     import inspect
     global args
@@ -3043,7 +3043,7 @@ def sendRequest(no_std_out=False):
 
     #url = 'https://api.openai.com/v1/chat/completions'
 
-    from clisa.tools.tool_base import ToolBase
+    #from clisa.base.tool_base import ToolBase
 
     global messages
     global finalMessages
