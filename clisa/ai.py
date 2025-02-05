@@ -48,9 +48,9 @@ import tempfile
 from itertools import groupby
 from operator import itemgetter
 
-from clisa.colon_tools.base_colon_command import BaseColonCommand
+from clisa.base.base_colon_command import BaseColonCommand
 from clisa.command import Command  # Import the base Command class
-from clisa.tools.tool_base import ToolBase
+from clisa.base.tool_base import ToolBase
 
 import importlib.util
 import importlib
@@ -82,7 +82,7 @@ import jsonschema
 from jsonschema import validate
 
 from clisa.role import Role  # Make sure this import is at the top of ai.py
-from clisa.colon_tools.base_colon_command import Action  # Import Action enum
+from clisa.base.base_colon_command import Action  # Import Action enum
 
 #AI TODO we need to add the feature such that when we use new feature :XXXXX it also disables {{}}
 
@@ -4817,10 +4817,10 @@ def main():
                         
                         # Process action results
                         for action_result in action_results:
-                            if action_result == Action.SET_CONVERSATION_TITLE:
+                            if action_result.action.value == Action.SET_CONVERSATION_TITLE.value:
                                 # Store the title for later use in filenames
                                 current_conversation_title = action_result.value
-                            elif action_result == Action.SET_CURRENT_FILE:
+                            elif action_result.action.value == Action.SET_CURRENT_FILE.value:
                                 # Update the current file name
                                 currFileName = action_result.value
                         
