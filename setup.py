@@ -35,7 +35,7 @@ dependency_links = [
 
 setup(
     name="clisa",
-    version="0.1.2",
+    version="0.1.3",
     packages=find_packages(),
     install_requires=install_requires,
     dependency_links=dependency_links,
