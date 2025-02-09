@@ -1,4 +1,4 @@
-from clisa.colon_tools.base_colon_command import BaseColonCommand, Action
+from clisa.base.base_colon_command import BaseColonCommand, Action
 import requests
 from typing import List, Tuple
 import json
