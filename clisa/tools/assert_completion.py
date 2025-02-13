@@ -1,5 +1,5 @@
 import datetime
-from clisa.tools.tool_base import ToolBase
+from clisa.base.tool_base import ToolBase
 import json
 import os
 from pathlib import Path

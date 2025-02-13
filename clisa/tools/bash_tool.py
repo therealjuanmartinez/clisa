@@ -1,4 +1,4 @@
-from clisa.tools.tool_base import ToolBase
+from clisa.base.tool_base import ToolBase
 import json
 import subprocess
 import time
