@@ -4816,13 +4816,16 @@ def main():
                         messages, cursor_location, action_results = module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
                         
                         # Process action results
-                        for action_result in action_results:
-                            if action_result.action.value == Action.SET_CONVERSATION_TITLE.value:
-                                # Store the title for later use in filenames
-                                current_conversation_title = action_result.value
-                            elif action_result.action.value == Action.SET_CURRENT_FILE.value:
-                                # Update the current file name
-                                currFileName = action_result.value
+                        try:
+                            for action_result in action_results:
+                                if action_result.action.value == Action.SET_CONVERSATION_TITLE.value:
+                                    # Store the title for later use in filenames
+                                    current_conversation_title = action_result.value
+                                elif action_result.action.value == Action.SET_CURRENT_FILE.value:
+                                    # Update the current file name
+                                    currFileName = action_result.value
+                        except:
+                            pass
                         
                         ran_command = True
                         break
