@@ -1721,6 +1721,7 @@ class MessageType:
    TOOLNAME = 1  # When we receive the tool name
    TOOLARGS = 2  # When we receive tool arguments
    TEXT = 3      # Regular text/content from LLM
+   ERROR = 4      # Regular text/content from LLM
 
 def send_chat_completion(messages, model=None, custom_params=None, tools=None, force_tools=False):
     """
@@ -1983,7 +1984,12 @@ except Exception as e:
                         yield chunk.choices[0].delta.content, MessageType.TEXT
             return stream_generator()
         else:
-            return response.choices[0].message.content, MessageType.TEXT #if stream didn't work - also need to make this work with tool calls
+            try:
+                return response.choices[0].message.content, MessageType.TEXT #if stream didn't work - also need to make this work with tool calls
+            except:
+                return "", MessageType.ERROR #if stream didn't work - also need to make this work with tool calls
+                
+
 
     except Exception as e:
         print(f"Error in chat completion: {str(e)}")
@@ -4355,1936 +4361,1939 @@ def main(): #hunt
 
     while True:  #AI this is the main conversation loop - takes in input and sends it to the API, and over and over
 
-        #is the last msg from a user? make sure the content is not just whitespace or blank or escape characters, like \x03
-        if (len(messages) > 0 and messages[-1]['role'] == "user" and not args.procimage):
-            foundPrintableChar = False
-            try:
-                mystr = messages[-1]['content'].strip()
-            except Exception as e:
-                print("Hmm... this is not a string or what?" + str(e) + " " + str(messages[-1]['content']))
-            for char in (str(messages[-1]['content']).strip()):
-                if char not in string.printable:
-                    pass
-                else:
-                    foundPrintableChar = True
-                    break
-            if not foundPrintableChar:
-                messages.pop() #that user message is garbage, remove it
+        try:
 
-                
-        #AI IDEA what if the mission metadata could be in the system message of the whatever
-
-        #only capture user input if last message was not from user (this accommodates predefined prompts)
-        if not (len(messages) > 0 and messages[-1]['role'] == "user"): #AI it is in here that we capture user input (this calls getch())
-
-            if (not paste): 
-                messagesCopy = []
-                for item in messages:
-                    messagesCopy.append(item)
+            #is the last msg from a user? make sure the content is not just whitespace or blank or escape characters, like \x03
+            if (len(messages) > 0 and messages[-1]['role'] == "user" and not args.procimage):
+                foundPrintableChar = False
                 try:
-                    hasSystemMessage = (messages[0]['role'] == "system")
-                except:
-                    hasSystemMessage = False
-                if (dontProcessInputYet == False) or (generatedImage == True):
-                    if (args.searchterm):    #assuming this is the 1st run of this loop since this gets None'd out
-                        printFileInformationLine(files[0]) #making an unsafe assumption that files is populated
-                        print()
-                        args.searchterm = None #ensure next loop we dont assume it's the first loop (i don't love this)
-                    print("vInput>>", end='')
-                    generatedImage = False
-                else:
-                    dontProcessInputYet = False
-                sys.stdout.flush()
+                    mystr = messages[-1]['content'].strip()
+                except Exception as e:
+                    print("Hmm... this is not a string or what?" + str(e) + " " + str(messages[-1]['content']))
+                for char in (str(messages[-1]['content']).strip()):
+                    if char not in string.printable:
+                        pass
+                    else:
+                        foundPrintableChar = True
+                        break
+                if not foundPrintableChar:
+                    messages.pop() #that user message is garbage, remove it
 
-                #check whether loaded_role is set and has a current mission and task cursor set 
-                on_a_mission = False
-                global loaded_role
-                if isinstance(loaded_role, Role) and loaded_role.get_current_mission_cursor() is not None and loaded_role.get_current_task_cursor() is not None:
-                    printYellow("Current mission and task cursor are set.")
-                    printYellow("Processing task...")
-                    task_details = process_mission() #this loads the tools and progresses the role/mission cursors 
-                    if task_details:
-                        printYellow(task_details)
-                        myinput = task_details
-                        on_a_mission = True
-                        #do a 7 second countdown
-                        for i in range(7, 0, -1):
-                            print(f"\rContinuing in {i} seconds...", end='')
-                            time.sleep(1)
-                        
-                while True and not on_a_mission: #This is the main user input loop
-                    """
-                    #AI look at the next 10 lines or so for main input loop info
-                    This is the user input loop, it handles input text, arrow keys, enter key, etc.
+                    
+            #AI IDEA what if the mission metadata could be in the system message of the whatever
 
-                    The main limitation is that pasting works badly. Therefore typing 'paste' puts you in 
-                    paste mode, where pasting works as expected, but you can't use arrow keys or CTRL-I, CTRL-X
-                    until you get back to the input prompt or enter 'nopaste' to exit paste mode.
+            #only capture user input if last message was not from user (this accommodates predefined prompts)
+            if not (len(messages) > 0 and messages[-1]['role'] == "user"): #AI it is in here that we capture user input (this calls getch())
 
-                    Paste works badly probably because of the speed of entry, the elements that capture
-                    arrow keys and such seem to mangle pasted text. There's probably a better fix to this
-                    or implementation.
-                    """
-                    #AI where we read keyboard entry for main loop
+                if (not paste): 
+                    messagesCopy = []
+                    for item in messages:
+                        messagesCopy.append(item)
+                    try:
+                        hasSystemMessage = (messages[0]['role'] == "system")
+                    except:
+                        hasSystemMessage = False
+                    if (dontProcessInputYet == False) or (generatedImage == True):
+                        if (args.searchterm):    #assuming this is the 1st run of this loop since this gets None'd out
+                            printFileInformationLine(files[0]) #making an unsafe assumption that files is populated
+                            print()
+                            args.searchterm = None #ensure next loop we dont assume it's the first loop (i don't love this)
+                        print("vInput>>", end='')
+                        generatedImage = False
+                    else:
+                        dontProcessInputYet = False
+                    sys.stdout.flush()
 
-                    c=''
-                    if True:
-                        try:
-                            #if not sys.stdin.isatty():
-                            #    print("Waiting for terminal...")
-                            #    try:
-                            #        tty_fd = os.open("/dev/tty", os.O_RDWR)
-                            #    except OSError:
-                            #        print("Failed to open terminal for keyboard input.")
-                                #debounce but wait
-                            c = getch() #read a key
-                        except KeyboardInterrupt as e:
-                            raise e
-
-                        #AI begin processing individual key presses for special cases like up arrow eshtc 
-                        if c == 'up': #UP ARROW
-                            """
-                            Go up in history of this conversation, 
-                            it's like a stack, so we can go back down again with down arrow.
-                            Purpose is to allow user to 'redo' a previous response and continue
-                            the conversation from there.
-                            """
-                            minMessages = 3 if hasSystemMessage else 2
-                            if (len(messagesCopy) + messages_cursor > minMessages):
-                                messages_cursor -= 2
-                                # Reset messages to be a copy up to the current cursor position
-                                messages = []
-                                for i in range(len(messagesCopy) + messages_cursor):
-                                    messages.append(messagesCopy[i])
-                                print("\033[2J\033[1;1H") #clear screen
-                                printMessagesToScreen(False, True)
-                                print()
-                                print("kInput>>" , end='', flush=True)
-
-                        elif c == 'down': #DOWN ARROW
-                            if (messages_cursor < 0):
-                                # take the next 2 messages from messagesCopy and append to bottom of messages
-                                messages_cursor += 2
-                                if (messages_cursor == 0):
-                                    #make messages == messagesCopy
-                                    messages = []
-                                    for item in messagesCopy:
-                                        messages.append(item)
-                                else:
-                                    messages.append(messagesCopy[len(messagesCopy)+messages_cursor-2])
-                                    messages.append(messagesCopy[len(messagesCopy)+messages_cursor-1])
-                                print("\033[2J\033[1;1H") #clear the screen
-                                printMessagesToScreen(False, True)
-                                print()
-                                print("iInput>>" , end='', flush=True)
-                        
-                        elif c == 'ctrlt': #AI ctrl+t here and we need to do something important, need to add where a modal pops up and shows us what tools we have available -  tool in args.tools_array:
-                            modalOfActiveTools()
-
-                        elif c == 'ctrln': #AI ctrl+t here and we need to do something important, need to add where a modal pops up and shows us what tools we have available -  tool in args.tools_array:
-                            #AI the below is also in the right-arrow code... this shoudl be refactored somehow probably, probably also in the left-arrow code
-                            if (myinput.strip() != "" and currFileName != ""):  # Save current input if necessary
-                                outputConversationToFile(currFileName, myinput.strip())
-                            else:
-                                outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName)
-                            add_new_conversation()
-                            print("wInput>>" , end='', flush=True)
-
-                        elif c == 'ctrl_up':  # CTRL-UP ARROW
-                            # Get the last user message
-                            lastUserMessage = ""
-                            for i in range(len(messages) - 1, -1, -1):
-                                if messages[i]['role'] == "user":
-                                    lastUserMessage = messages[i]['content']
-                                    break
+                    #check whether loaded_role is set and has a current mission and task cursor set 
+                    on_a_mission = False
+                    global loaded_role
+                    if isinstance(loaded_role, Role) and loaded_role.get_current_mission_cursor() is not None and loaded_role.get_current_task_cursor() is not None:
+                        printYellow("Current mission and task cursor are set.")
+                        printYellow("Processing task...")
+                        task_details = process_mission() #this loads the tools and progresses the role/mission cursors 
+                        if task_details:
+                            printYellow(task_details)
+                            myinput = task_details
+                            on_a_mission = True
+                            #do a 7 second countdown
+                            for i in range(7, 0, -1):
+                                print(f"\rContinuing in {i} seconds...", end='')
+                                time.sleep(1)
                             
-                            #command_index
+                    while True and not on_a_mission: #This is the main user input loop
+                        """
+                        #AI look at the next 10 lines or so for main input loop info
+                        This is the user input loop, it handles input text, arrow keys, enter key, etc.
 
-                            # Clear the last printed line (if any)
-                            print("\033[F\033[K", end='')  # Move the cursor up one line and clear that line
+                        The main limitation is that pasting works badly. Therefore typing 'paste' puts you in 
+                        paste mode, where pasting works as expected, but you can't use arrow keys or CTRL-I, CTRL-X
+                        until you get back to the input prompt or enter 'nopaste' to exit paste mode.
 
-                            # Print the last user message
-                            print(lastUserMessage)  # Print the last user message
+                        Paste works badly probably because of the speed of entry, the elements that capture
+                        arrow keys and such seem to mangle pasted text. There's probably a better fix to this
+                        or implementation.
+                        """
+                        #AI where we read keyboard entry for main loop
 
-                            # Print "NOT IMPLEMENTED" on a new line
-                            print("NOT IMPLEMENTED")
-
-                            # Prepare the input line again
-                            print("\r>> ", end='')  # Bring the cursor back to the start of the line and show the prompt
-                            myinput = ""  # Reset myinput for new input
-
-                        elif c == 'ctrli': #CTRL-I
-                            """
-                            vi mode, but in this case it lets you edit what you've already typed in the input line.
-                            Upon saving and exiting the vi session, the contents of that vi session are written to /dev/shm/convo.input
-                            and then read back into myinput
-
-                            TODO: Refactor/combine this with "vi" command logic, which is basically the same, with the exception that this
-                            one will pass the already-input text to vi
-                            """
-                            #if the file exists, remove it
-                            if os.path.exists("/dev/shm/convo.input"):
-                                os.remove("/dev/shm/convo.input")
-                            #is the last message in messages a user message
-                                #write content of last message (from user) to /dev/shm/convo.input
-                            with open("/dev/shm/convo.input", "w") as f:
-                                f.write(myinput)
-                                myinput = ""
-                            if (messages[len(messages)-1]['role'] == "user"):
-                                messages.pop()
-                            subprocess.run(['vi', "/dev/shm/convo.input"])
-                            #attempt to read /dev/shm/convo.input into myinput
+                        c=''
+                        if True:
                             try:
-                                with open("/dev/shm/convo.input", "r") as f:
-                                    myinput = f.read()  #.strip()
-                                    #remove single endline from end of myinput if it exists (vi seems to add one)
-                                    if (myinput[-1] == "\n"):
-                                        myinput = myinput[:-1]
-                                    #clear screen
-                                    print("\033[2J\033[1;1H")
-                                    #print messages
-                                    printMessagesToScreen()
-                                    print("jInput>>" + myinput, end='', flush=True)
-                                    dontProcessInputYet = True
-                                    if (len(myinput.strip()) == 0):
-                                        #dlog("myinput is blank, not appending to messages")
-                                        #dontAppendToMessages = True
-                                        continue
-                                    break
-                            except:
-                                myinput = ""
-                                #dontAppendToMessages = True
-                                continue
+                                #if not sys.stdin.isatty():
+                                #    print("Waiting for terminal...")
+                                #    try:
+                                #        tty_fd = os.open("/dev/tty", os.O_RDWR)
+                                #    except OSError:
+                                #        print("Failed to open terminal for keyboard input.")
+                                    #debounce but wait
+                                c = getch() #read a key
+                            except KeyboardInterrupt as e:
+                                raise e
 
-                        
-                        elif c == 'ctrlx':  #CTRL-X
-                            """
-                            delete the conversation file we're currently viewing then find a spot to move to
-                            if there is only one file in the array, do nothing.
-                            clear messages, clear messagesCopy, delete file
-                            """
-                            messages = []
-                            messagesCopy = []
-                            #does it exist
-                            if (os.path.isfile(files[files_cursor-1])):
-                                os.remove(files[files_cursor-1])
-                                #dlog("deleted file "+files[files_cursor-1])
-                            #remove that element from arrayLoc
-                            if (files_cursor != 0):
-                                files.pop(files_cursor-1)
-                            #does the file files[file_cursor-1] exist? 
-                            if (True):#(os.path.isfile(files[files_cursor])): #bit of a smoke test
-                                message_cursor = 0
-                                print("\033[2J\033[1;1H") #clear screen
-                                if (files_cursor == 0):
-                                    #we're on the temp file
-                                    #clear out all messages that are not system messages
-                                    for message in messages:
-                                        #is it a system message
-                                        if (message['role'] == "system"):
-                                            messagesCopy.append(message)
-                                            break
-                                    messages = messagesCopy
+                            #AI begin processing individual key presses for special cases like up arrow eshtc 
+                            if c == 'up': #UP ARROW
+                                """
+                                Go up in history of this conversation, 
+                                it's like a stack, so we can go back down again with down arrow.
+                                Purpose is to allow user to 'redo' a previous response and continue
+                                the conversation from there.
+                                """
+                                minMessages = 3 if hasSystemMessage else 2
+                                if (len(messagesCopy) + messages_cursor > minMessages):
+                                    messages_cursor -= 2
+                                    # Reset messages to be a copy up to the current cursor position
+                                    messages = []
+                                    for i in range(len(messagesCopy) + messages_cursor):
+                                        messages.append(messagesCopy[i])
+                                    print("\033[2J\033[1;1H") #clear screen
+                                    printMessagesToScreen(False, True)
+                                    print()
+                                    print("kInput>>" , end='', flush=True)
+
+                            elif c == 'down': #DOWN ARROW
+                                if (messages_cursor < 0):
+                                    # take the next 2 messages from messagesCopy and append to bottom of messages
+                                    messages_cursor += 2
+                                    if (messages_cursor == 0):
+                                        #make messages == messagesCopy
+                                        messages = []
+                                        for item in messagesCopy:
+                                            messages.append(item)
+                                    else:
+                                        messages.append(messagesCopy[len(messagesCopy)+messages_cursor-2])
+                                        messages.append(messagesCopy[len(messagesCopy)+messages_cursor-1])
+                                    print("\033[2J\033[1;1H") #clear the screen
+                                    printMessagesToScreen(False, True)
+                                    print()
+                                    print("iInput>>" , end='', flush=True)
+                            
+                            elif c == 'ctrlt': #AI ctrl+t here and we need to do something important, need to add where a modal pops up and shows us what tools we have available -  tool in args.tools_array:
+                                modalOfActiveTools()
+
+                            elif c == 'ctrln': #AI ctrl+t here and we need to do something important, need to add where a modal pops up and shows us what tools we have available -  tool in args.tools_array:
+                                #AI the below is also in the right-arrow code... this shoudl be refactored somehow probably, probably also in the left-arrow code
+                                if (myinput.strip() != "" and currFileName != ""):  # Save current input if necessary
+                                    outputConversationToFile(currFileName, myinput.strip())
                                 else:
-                                    while (True): #this not failing is predicated on the idea that we will never be allowed to delete the last file in the array
+                                    outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName)
+                                add_new_conversation()
+                                print("wInput>>" , end='', flush=True)
+
+                            elif c == 'ctrl_up':  # CTRL-UP ARROW
+                                # Get the last user message
+                                lastUserMessage = ""
+                                for i in range(len(messages) - 1, -1, -1):
+                                    if messages[i]['role'] == "user":
+                                        lastUserMessage = messages[i]['content']
+                                        break
+                                
+                                #command_index
+
+                                # Clear the last printed line (if any)
+                                print("\033[F\033[K", end='')  # Move the cursor up one line and clear that line
+
+                                # Print the last user message
+                                print(lastUserMessage)  # Print the last user message
+
+                                # Print "NOT IMPLEMENTED" on a new line
+                                print("NOT IMPLEMENTED")
+
+                                # Prepare the input line again
+                                print("\r>> ", end='')  # Bring the cursor back to the start of the line and show the prompt
+                                myinput = ""  # Reset myinput for new input
+
+                            elif c == 'ctrli': #CTRL-I
+                                """
+                                vi mode, but in this case it lets you edit what you've already typed in the input line.
+                                Upon saving and exiting the vi session, the contents of that vi session are written to /dev/shm/convo.input
+                                and then read back into myinput
+
+                                TODO: Refactor/combine this with "vi" command logic, which is basically the same, with the exception that this
+                                one will pass the already-input text to vi
+                                """
+                                #if the file exists, remove it
+                                if os.path.exists("/dev/shm/convo.input"):
+                                    os.remove("/dev/shm/convo.input")
+                                #is the last message in messages a user message
+                                    #write content of last message (from user) to /dev/shm/convo.input
+                                with open("/dev/shm/convo.input", "w") as f:
+                                    f.write(myinput)
+                                    myinput = ""
+                                if (messages[len(messages)-1]['role'] == "user"):
+                                    messages.pop()
+                                subprocess.run(['vi', "/dev/shm/convo.input"])
+                                #attempt to read /dev/shm/convo.input into myinput
+                                try:
+                                    with open("/dev/shm/convo.input", "r") as f:
+                                        myinput = f.read()  #.strip()
+                                        #remove single endline from end of myinput if it exists (vi seems to add one)
+                                        if (myinput[-1] == "\n"):
+                                            myinput = myinput[:-1]
+                                        #clear screen
+                                        print("\033[2J\033[1;1H")
+                                        #print messages
+                                        printMessagesToScreen()
+                                        print("jInput>>" + myinput, end='', flush=True)
+                                        dontProcessInputYet = True
+                                        if (len(myinput.strip()) == 0):
+                                            #dlog("myinput is blank, not appending to messages")
+                                            #dontAppendToMessages = True
+                                            continue
+                                        break
+                                except:
+                                    myinput = ""
+                                    #dontAppendToMessages = True
+                                    continue
+
+                            
+                            elif c == 'ctrlx':  #CTRL-X
+                                """
+                                delete the conversation file we're currently viewing then find a spot to move to
+                                if there is only one file in the array, do nothing.
+                                clear messages, clear messagesCopy, delete file
+                                """
+                                messages = []
+                                messagesCopy = []
+                                #does it exist
+                                if (os.path.isfile(files[files_cursor-1])):
+                                    os.remove(files[files_cursor-1])
+                                    #dlog("deleted file "+files[files_cursor-1])
+                                #remove that element from arrayLoc
+                                if (files_cursor != 0):
+                                    files.pop(files_cursor-1)
+                                #does the file files[file_cursor-1] exist? 
+                                if (True):#(os.path.isfile(files[files_cursor])): #bit of a smoke test
+                                    message_cursor = 0
+                                    print("\033[2J\033[1;1H") #clear screen
+                                    if (files_cursor == 0):
+                                        #we're on the temp file
+                                        #clear out all messages that are not system messages
+                                        for message in messages:
+                                            #is it a system message
+                                            if (message['role'] == "system"):
+                                                messagesCopy.append(message)
+                                                break
+                                        messages = messagesCopy
+                                    else:
+                                        while (True): #this not failing is predicated on the idea that we will never be allowed to delete the last file in the array
+                                            try:
+                                                messages = getMessagesFromFile(files[files_cursor])
+                                                currFileName = files[files_cursor]
+                                                #dlog("Files cursor is " + str(files_cursor) + " and files[files_cursor] is " + files[files_cursor])
+                                                files_cursor += 1
+                                                printMessagesToScreen()
+                                                break
+                                            except:
+                                                files_cursor -= 1
+                                                pass
+                                    print("jkInput>>", end='', flush=True)
+
+                            elif c == 'left': #LEFT ARROW
+                                """
+                                Go to the previous conversation 
+                                """
+                                #AI PROFILING i want to profile from this line until we get back to getch()
+                                if (files_cursor == 0): #we may be moving away from the 'live' session, so it needs to be saved 
+                                    #ok write the messages to a file, the /dev/shm file we created in the beginning
+                                    #is this file located in /dev/shm? (might not be, if we ran a search term)
+                                    if ("/dev/shm" in files[0]):
+                                        if (myinput.strip() != ""):
+                                            outputConversationToFile(files[0], myinput.strip())
+                                        else:
+                                            outputConversationToFile(files[0]) 
+                                else: #this has no bad outcome but ideally it should be changed to not happen when we're at the end 
+                                    if (myinput.strip() != "" and currFileName != ""): #yeah, let's write this to a file
+                                        #dlog("writing to file " + currFileName + " due to the unprocessed input " + myinput.strip())
+                                        outputConversationToFile(currFileName, myinput.strip())
+                                    else:
+                                        outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName)
+                                while (True): #loop until find a file that works or give up
+                                    #make sure abs(files_cursor) is less than len(files) - 1
+                                    if (files_cursor < len(files) - 1): #AI todo make sure shouldn't be files-2?
+                                        files_cursor += 1
                                         try:
                                             messages = getMessagesFromFile(files[files_cursor])
-                                            currFileName = files[files_cursor]
-                                            #dlog("Files cursor is " + str(files_cursor) + " and files[files_cursor] is " + files[files_cursor])
-                                            files_cursor += 1
-                                            printMessagesToScreen()
+                                            messagesCopy = []
+                                            for item in messages:
+                                                messagesCopy.append(item)
+                                            #dlog("LM: files_cursor is now" + str(files_cursor) + "file: " + files[arrayLoc])
+                                            hasSystemMessage = (messages[0]['role'] == "system")
+                                            print("\033[2J\033[1;1H") #clear screen
+                                            printMessagesToScreen(True)
+                                            myinput = ""
+                                            if (len(messages) > 1):
+                                                printFileInformationLine(files[files_cursor])
+                                            print("mInput>>", end='', flush=True) #TODO this input when used seems to ignore commands?
+                                            #gotAnyRequestResult = False
+                                            currFileName = files[files_cursor] #AI hey, refactor, high priority, remove currFileName entirely and just use files[files_cursor] although are there times where... currFileName is not yet in files?
+                                            #print("File: " + files[arrayLoc] + " and cursor is " + str(arrayLoc))
                                             break
-                                        except:
-                                            files_cursor -= 1
+                                        except Exception as e:
+                                            print("Exception in left move: " + str(e))
                                             pass
-                                print("jkInput>>", end='', flush=True)
-
-                        elif c == 'left': #LEFT ARROW
-                            """
-                            Go to the previous conversation 
-                            """
-                            #AI PROFILING i want to profile from this line until we get back to getch()
-                            if (files_cursor == 0): #we may be moving away from the 'live' session, so it needs to be saved 
-                                #ok write the messages to a file, the /dev/shm file we created in the beginning
-                                #is this file located in /dev/shm? (might not be, if we ran a search term)
-                                if ("/dev/shm" in files[0]):
-                                    if (myinput.strip() != ""):
-                                        outputConversationToFile(files[0], myinput.strip())
                                     else:
-                                        outputConversationToFile(files[0]) 
-                            else: #this has no bad outcome but ideally it should be changed to not happen when we're at the end 
+                                        break
+                            elif c == 'right': #RIGHT ARROW
+                                """
+                                Go to the next conversation
+                                """
                                 if (myinput.strip() != "" and currFileName != ""): #yeah, let's write this to a file
                                     #dlog("writing to file " + currFileName + " due to the unprocessed input " + myinput.strip())
                                     outputConversationToFile(currFileName, myinput.strip())
                                 else:
                                     outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName)
-                            while (True): #loop until find a file that works or give up
-                                #make sure abs(files_cursor) is less than len(files) - 1
-                                if (files_cursor < len(files) - 1): #AI todo make sure shouldn't be files-2?
-                                    files_cursor += 1
-                                    try:
-                                        messages = getMessagesFromFile(files[files_cursor])
-                                        messagesCopy = []
-                                        for item in messages:
-                                            messagesCopy.append(item)
-                                        #dlog("LM: files_cursor is now" + str(files_cursor) + "file: " + files[arrayLoc])
-                                        hasSystemMessage = (messages[0]['role'] == "system")
-                                        print("\033[2J\033[1;1H") #clear screen
-                                        printMessagesToScreen(True)
-                                        myinput = ""
-                                        if (len(messages) > 1):
-                                            printFileInformationLine(files[files_cursor])
-                                        print("mInput>>", end='', flush=True) #TODO this input when used seems to ignore commands?
-                                        #gotAnyRequestResult = False
-                                        currFileName = files[files_cursor] #AI hey, refactor, high priority, remove currFileName entirely and just use files[files_cursor] although are there times where... currFileName is not yet in files?
-                                        #print("File: " + files[arrayLoc] + " and cursor is " + str(arrayLoc))
+                                while (True): #loop until find a file that works or give up
+                                    if (files_cursor > 0):
+                                        files_cursor -= 1
+                                        try:
+                                            messages = getMessagesFromFile(files[files_cursor])
+                                            messagesCopy = []
+                                            for item in messages:
+                                                messagesCopy.append(item)
+                                            #dlog("RM: files_cursor is now" + str(files_cursor) + "file: " + files[arrayLoc])
+                                            hasSystemMessage = (len(messages) > 0 and messages[0]['role'] == "system")
+                                            clear_terminal()
+                                            printMessagesToScreen(True)
+                                            myinput = ""
+                                            if (len(messages) > 1):
+                                                printFileInformationLine(files[files_cursor])
+                                            print("nInput>>", end='', flush=True)
+                                            currFileName = files[files_cursor]
+                                            #print("File: " + files[arrayLoc] + " and cursor is " + str(arrayLoc))
+                                            break
+                                        except Exception as e:
+                                            print("Exception in right move: " + str(e))
+                                            pass
+                                    else:
                                         break
-                                    except Exception as e:
-                                        print("Exception in left move: " + str(e))
-                                        pass
-                                else:
-                                    break
-                        elif c == 'right': #RIGHT ARROW
-                            """
-                            Go to the next conversation
-                            """
-                            if (myinput.strip() != "" and currFileName != ""): #yeah, let's write this to a file
-                                #dlog("writing to file " + currFileName + " due to the unprocessed input " + myinput.strip())
-                                outputConversationToFile(currFileName, myinput.strip())
-                            else:
-                                outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName)
-                            while (True): #loop until find a file that works or give up
-                                if (files_cursor > 0):
-                                    files_cursor -= 1
-                                    try:
-                                        messages = getMessagesFromFile(files[files_cursor])
-                                        messagesCopy = []
-                                        for item in messages:
-                                            messagesCopy.append(item)
-                                        #dlog("RM: files_cursor is now" + str(files_cursor) + "file: " + files[arrayLoc])
-                                        hasSystemMessage = (len(messages) > 0 and messages[0]['role'] == "system")
-                                        clear_terminal()
-                                        printMessagesToScreen(True)
-                                        myinput = ""
-                                        if (len(messages) > 1):
-                                            printFileInformationLine(files[files_cursor])
-                                        print("nInput>>", end='', flush=True)
-                                        currFileName = files[files_cursor]
-                                        #print("File: " + files[arrayLoc] + " and cursor is " + str(arrayLoc))
-                                        break
-                                    except Exception as e:
-                                        print("Exception in right move: " + str(e))
-                                        pass
-                                else:
-                                    break
-                        elif c == '\x03': #CTRL-C
-                            """
-                            Exit the program but save file first 
-                            """
-                            print()
-                            #TODO refactor this to not be duplicated as it is currently in the RIGHT ARROW code block
-                            if (myinput.strip() != "" and currFileName != ""): #yeah, let's write this to a file
-                                #dlog("writing to file " + currFileName + " due to the unprocessed input " + myinput.strip())
-                                outputConversationToFile(None, myinput.strip())
-                            else:
-                                outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages()
-                            os._exit(0) 
-
-                        elif c == '\n' or c.strip() == "{{enter}}": #ENTER KEY 
-                            """
-                            If no input has been entered, then the program saves the conversation and exits.
-                            Otherwise, this results in the input being processed (if a command) or sent to the AI (if not a command)
-                            """
-                            if c.strip() != "{{enter}}" or len(myinput.strip()) > 0:
+                            elif c == '\x03': #CTRL-C ctrlc CTRL+C
+                                """
+                                This gets hit a lot when trying to interrupt the API calls, and was causing the program to exit unintentionally.
+                                """
+                                print("\n")
+                                printGrey("Hit enter on a blank line to exit")
                                 print()
-                                break
-                            else: #prevent accidental exit from this script when hitting enter in android app when no input has been entered
-                                pass
+                                print("qInput>>", end='', flush=True)
+                                continue
 
-                        elif c == '\x7f' or c  == 'backspace': #BACKSPACE
-                            if len(myinput) > 0:
-                                myinput = myinput[:-1]
-                                print("\b \b", end="", flush=True)
-                        # Append the entered character to mystring
-                        #elif c == '':
-                            #this means we got possibly an 'interrupt' from an external process
-                    #     break
-                        elif c not in ('up', 'down', 'ctrlx', 'ctrli',  None): 
-                            try:
-                                myinput += c.decode('utf-8')
-                            except:
-                                try:
-                                    myinput += c
-                                except:
+                            elif c == '\n' or c.strip() == "{{enter}}": #ENTER KEY 
+                                """
+                                If no input has been entered, then the program saves the conversation and exits.
+                                Otherwise, this results in the input being processed (if a command) or sent to the AI (if not a command)
+                                """
+                                if c.strip() != "{{enter}}" or len(myinput.strip()) > 0:
+                                    print()
+                                    break
+                                else: #prevent accidental exit from this script when hitting enter in android app when no input has been entered
                                     pass
+
+                            elif c == '\x7f' or c  == 'backspace': #BACKSPACE
+                                if len(myinput) > 0:
+                                    myinput = myinput[:-1]
+                                    print("\b \b", end="", flush=True)
+                            # Append the entered character to mystring
+                            #elif c == '':
+                                #this means we got possibly an 'interrupt' from an external process
+                        #     break
+                            elif c not in ('up', 'down', 'ctrlx', 'ctrli',  None): 
+                                try:
+                                    myinput += c.decode('utf-8')
+                                except:
+                                    try:
+                                        myinput += c
+                                    except:
+                                        pass
+                                try:
+                                    print(c.decode('utf-8'), end="", flush=True)
+                                except:
+                                    print(str(c), end="", flush=True)
+                            #is last character a \n
+                            elif myinput[-1] == "\n":
+                                myinput = myinput[:-1]
+                                print(myinput, flush=True)
+                                break
+
+                            
+                #AI end user input loop
+
+                #AI bug/feat need to make it so if after breaking a tool loop it still does it, like, the attempt to break the loop 'provide a different responmce 
+
+                else: #paste, no arrow functionality
+                    myinput = input("aInput>>").strip() #here's the user's prompt
+
+                if (len(myinput)) < 1:
+
+                    if (currFileName != "" and "/dev/shm" in currFileName):
+                        currFileName = None
+                    #print("currFileName is " + str(currFileName))
+                    outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName, True)
+                    os._exit(0)
+
+                global colon_command_modules
+
+                #print("colon_command_modules is " + str(colon_command_modules))
+
+                modcommands = []
+                descriptions = []
+
+                
+                #myinput = process_commands(myinput)  #removing this for now, if a while goes by and hasn't been missed, remove it
+                missionstr = process_mission() #AI yes this resets myinput entirely,  if has value
+
+                if missionstr is not None and (len(missionstr) > 0):
+                    myinput = missionstr
+
+
+
+                if myinput == "": 
+                    print()
+
+                
+                #at this point we may have a colon command, so we need to check for that
+                if myinput.strip().startswith(":"):
+                    #get the command name
+                    command_name = myinput.strip()[1:].split()[0]
+                    #words_after_commands should be a string representing all words after thec ommand but with strip() of course
+                    words_after_command = myinput.strip()[1:].split()[1:]
+                    #if it's a list, join it with spaces
+                    if isinstance(words_after_command, list):
+                        words_after_command = " ".join(words_after_command)
+                    #iterate through colon_command_modules
+                    ran_command = False
+                    for module in colon_command_modules:
+                        if command_name in module.command_names():
+                            #call the command
+                            cursor_location = len(messages)
+                            max_messages = 10000
+                            messages, cursor_location, action_results = module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
+                            
+                            # Process action results
                             try:
-                                print(c.decode('utf-8'), end="", flush=True)
+                                for action_result in action_results:
+                                    if action_result.action.value == Action.SET_CONVERSATION_TITLE.value:
+                                        # Store the title for later use in filenames
+                                        current_conversation_title = action_result.value
+                                    elif action_result.action.value == Action.SET_CURRENT_FILE.value:
+                                        # Update the current file name
+                                        currFileName = action_result.value
                             except:
-                                print(str(c), end="", flush=True)
-                        #is last character a \n
-                        elif myinput[-1] == "\n":
-                            myinput = myinput[:-1]
-                            print(myinput, flush=True)
+                                pass
+                            
+                            ran_command = True
                             break
+                    if ran_command:
+                        myinput = ""
+                        continue
 
-                        
-            #AI end user input loop
+                
+                #AI begin processing inline commands that all start with a ":" so like :q! works, :vij works, :savetools, etc
 
-            #AI bug/feat need to make it so if after breaking a tool loop it still does it, like, the attempt to break the loop 'provide a different responmce 
+                if (myinput.strip() == ":q!"):
+                    os._exit(0)
 
-            else: #paste, no arrow functionality
-                myinput = input("aInput>>").strip() #here's the user's prompt
-
-            if (len(myinput)) < 1:
-
-                if (currFileName != "" and "/dev/shm" in currFileName):
-                    currFileName = None
-                #print("currFileName is " + str(currFileName))
-                outputConversationToFileIfAtLeastOneNonSystemMessageAndIfProvidedFileHasAnyMismatchFromMessages(currFileName, True)
-                os._exit(0)
-
-            global colon_command_modules
-
-            #print("colon_command_modules is " + str(colon_command_modules))
-
-            modcommands = []
-            descriptions = []
-
-            
-            #myinput = process_commands(myinput)  #removing this for now, if a while goes by and hasn't been missed, remove it
-            missionstr = process_mission() #AI yes this resets myinput entirely,  if has value
-
-            if missionstr is not None and (len(missionstr) > 0):
-                myinput = missionstr
-
-
-
-            if myinput == "": 
-                print()
-
-            
-            #at this point we may have a colon command, so we need to check for that
-            if myinput.strip().startswith(":"):
-                #get the command name
-                command_name = myinput.strip()[1:].split()[0]
-                #words_after_commands should be a string representing all words after thec ommand but with strip() of course
-                words_after_command = myinput.strip()[1:].split()[1:]
-                #if it's a list, join it with spaces
-                if isinstance(words_after_command, list):
-                    words_after_command = " ".join(words_after_command)
-                #iterate through colon_command_modules
-                ran_command = False
-                for module in colon_command_modules:
-                    if command_name in module.command_names():
-                        #call the command
-                        cursor_location = len(messages)
-                        max_messages = 10000
-                        messages, cursor_location, action_results = module.execute(command_name, words_after_command, messages, cursor_location, max_messages)
-                        
-                        # Process action results
-                        try:
-                            for action_result in action_results:
-                                if action_result.action.value == Action.SET_CONVERSATION_TITLE.value:
-                                    # Store the title for later use in filenames
-                                    current_conversation_title = action_result.value
-                                elif action_result.action.value == Action.SET_CURRENT_FILE.value:
-                                    # Update the current file name
-                                    currFileName = action_result.value
-                        except:
-                            pass
-                        
-                        ran_command = True
-                        break
-                if ran_command:
+                #vij - this part has to happen early, because it's a special case that modifies the input/messages
+                if (myinput.strip() == ":vij"):
+                    """
+                    Open the JSON representation of the conversation in vi
+                    Allows the user to modify the conversation, 
+                    save it and exit like a normal vi user would,
+                    and then the conversation will be reloaded and continue
+                    """
                     myinput = ""
-                    continue
-
-            
-            #AI begin processing inline commands that all start with a ":" so like :q! works, :vij works, :savetools, etc
-
-            if (myinput.strip() == ":q!"):
-                os._exit(0)
-
-            #vij - this part has to happen early, because it's a special case that modifies the input/messages
-            if (myinput.strip() == ":vij"):
-                """
-                Open the JSON representation of the conversation in vi
-                Allows the user to modify the conversation, 
-                save it and exit like a normal vi user would,
-                and then the conversation will be reloaded and continue
-                """
-                myinput = ""
-                outputConversationToFile("/dev/shm/convo.json")
-                subprocess.run(['vim', "/dev/shm/convo.json"])
-                try:
-                    messages = getMessagesFromFile("/dev/shm/convo.json")
-                    #is last message from user
-                    #if not (messages[-1]['role'] == "user"):
-                    #    dontAppendToMessages = True
-                    os.system("clear")
-                except:
-                    print("\033[31m")
-                    print("Could not parse JSON")
-                    #is the last message in messages a user message
-                    if (messages[len(messages)-1]['role'] == "user"):
-                        print("Last message in saved conversation is from user - it will be printed here but not be processed:")
-                    print("\033[0m")
-                    if (messages[len(messages)-1]['role'] == "user"):
-                        #print content of last message (from user)
-                        print("User Message: " + messages[len(messages)-1]['content'] + "\n")
-                        messages.pop()
-                    #dontAppendToMessages = True
-                    continue
-                finally: 
-                    os.remove("/dev/shm/convo.json") 
-                os.system("clear")
-                printMessagesToScreen()
-                if (messages[-1]['role'] == "user" or messages[-1]['role'] == "system"):
-                    #if it's user
-                    if messages[-1]['role'] == "user":
-                        myinput = messages[-1]['content']
-                        #dontAppendToMessages = True
-                    pass
-                else:
-                    continue
-
-            #TODO this would be a great candidate for refactor into separate file/class
-            #sr - speedread. experimental.
-            #output last message to /dev/shm/sr.txt and nothing more
-            if (myinput.strip() == ":sr"):
-                myinput = ""
-                if (len(messages) > 0):
-                    with open("/dev/shm/sr.txt", "w") as f:
-                        f.write(messages[-1]['content'])
-                    command = "cat /dev/shm/sr.txt | " + home + "/speedread/speedread -w 800"
-
-                    #running speedread in such a way that user can ctrl-c and it doesn't also kill ai.py 
-                    p = subprocess.Popen(command, shell=True)
+                    outputConversationToFile("/dev/shm/convo.json")
+                    subprocess.run(['vim', "/dev/shm/convo.json"])
                     try:
-                        p.wait()
-                    except KeyboardInterrupt:
-                        print("FAFAFA")
-                        p.terminate()
-
-                    #clear screen
-                    print("\033[2J\033[1;1H")
-                    #print messages
+                        messages = getMessagesFromFile("/dev/shm/convo.json")
+                        #is last message from user
+                        #if not (messages[-1]['role'] == "user"):
+                        #    dontAppendToMessages = True
+                        os.system("clear")
+                    except:
+                        print("\033[31m")
+                        print("Could not parse JSON")
+                        #is the last message in messages a user message
+                        if (messages[len(messages)-1]['role'] == "user"):
+                            print("Last message in saved conversation is from user - it will be printed here but not be processed:")
+                        print("\033[0m")
+                        if (messages[len(messages)-1]['role'] == "user"):
+                            #print content of last message (from user)
+                            print("User Message: " + messages[len(messages)-1]['content'] + "\n")
+                            messages.pop()
+                        #dontAppendToMessages = True
+                        continue
+                    finally: 
+                        os.remove("/dev/shm/convo.json") 
+                    os.system("clear")
                     printMessagesToScreen()
-                    #print("Input>>", end='', flush=True)
-                else:
-                    print("No messages to speedread")
-                    print("oInput>>", end='', flush=True)
-                continue
+                    if (messages[-1]['role'] == "user" or messages[-1]['role'] == "system"):
+                        #if it's user
+                        if messages[-1]['role'] == "user":
+                            myinput = messages[-1]['content']
+                            #dontAppendToMessages = True
+                        pass
+                    else:
+                        continue
 
-            #vi - this edits just the input only
-            if (myinput.strip() == ":vi"): 
-                #if the file exists, remove it
-                if os.path.exists("/dev/shm/convo.input"):
-                    os.remove("/dev/shm/convo.input")
-                    #if exists "/dev/shm/vi.prompt." + str(os.getpid())
-                #Pull stdin into VI mode
-                if os.path.exists("/dev/shm/vi.prompt." + str(os.getpid())): 
-                    #overwrite /dev/shm/convo.input with stdin from /dev/shm/vi.prompt." + str(os.getpid()) 
-                    #as in copy the file /dev/shm/vi.prompt." + str(os.getpid()) to /dev/shm/convo.input
-                    os.system("cp /dev/shm/vi.prompt." + str(os.getpid()) + " /dev/shm/convo.input")
-                elif (messages[len(messages)-1]['role'] == "user"): #is the last message in messages a user message
-                    #write content of last message (from user) to /dev/shm/convo.input
-                    with open("/dev/shm/convo.input", "w") as f:
-                        f.write(messages[len(messages)-1]['content'])
-                    messages.pop()
-                subprocess.run(['vi', "/dev/shm/convo.json"])
-                #attempt to read /dev/shm/convo.input into myinput
-                os.system('reset')
-                try:
-                    with open("/dev/shm/convo.input", "r") as f:
-                        myinput = f.read()
-                        #remove single endline from end of myinput if it exists
-                        if (myinput[-1] == "\n"):
-                            myinput = myinput[:-1]
+                #TODO this would be a great candidate for refactor into separate file/class
+                #sr - speedread. experimental.
+                #output last message to /dev/shm/sr.txt and nothing more
+                if (myinput.strip() == ":sr"):
+                    myinput = ""
+                    if (len(messages) > 0):
+                        with open("/dev/shm/sr.txt", "w") as f:
+                            f.write(messages[-1]['content'])
+                        command = "cat /dev/shm/sr.txt | " + home + "/speedread/speedread -w 800"
+
+                        #running speedread in such a way that user can ctrl-c and it doesn't also kill ai.py 
+                        p = subprocess.Popen(command, shell=True)
+                        try:
+                            p.wait()
+                        except KeyboardInterrupt:
+                            print("FAFAFA")
+                            p.terminate()
+
                         #clear screen
                         print("\033[2J\033[1;1H")
                         #print messages
                         printMessagesToScreen()
-                        print("pInput>>", end='', flush=True)
-                        print(myinput, end='', flush=True)
-                        dontProcessInputYet = True
-                        if (len(myinput.strip()) == 0):
-                            #dontAppendToMessages = True
-                            continue 
-                except:
-                    myinput = ""
-                    #dontAppendToMessages = True
+                        #print("Input>>", end='', flush=True)
+                    else:
+                        print("No messages to speedread")
+                        print("oInput>>", end='', flush=True)
                     continue
 
-            if myinput.strip().startswith(":hint"):
-                if isinstance(loaded_role, Role):
-                    loaded_role.id
-                    import sqlite3
-                    hint_text = replace_bash_commands(myinput.strip()[6:])
-                    conn = sqlite3.connect(BASE_DIR/'roles.db')
-                    cursor = conn.cursor()
-                    cursor.execute('INSERT INTO hints (text, role_id) VALUES (?, ?)', (hint_text, int(loaded_role.id)))
-                    conn.commit()
-                    printGrey("Inserted hint for role " + str(loaded_role.id) + "\n")
-                    conn.close()
-                else:
-                    print("Error: no role loaded")
-                myinput = ""
-                continue
+                #vi - this edits just the input only
+                if (myinput.strip() == ":vi"): 
+                    #if the file exists, remove it
+                    if os.path.exists("/dev/shm/convo.input"):
+                        os.remove("/dev/shm/convo.input")
+                        #if exists "/dev/shm/vi.prompt." + str(os.getpid())
+                    #Pull stdin into VI mode
+                    if os.path.exists("/dev/shm/vi.prompt." + str(os.getpid())): 
+                        #overwrite /dev/shm/convo.input with stdin from /dev/shm/vi.prompt." + str(os.getpid()) 
+                        #as in copy the file /dev/shm/vi.prompt." + str(os.getpid()) to /dev/shm/convo.input
+                        os.system("cp /dev/shm/vi.prompt." + str(os.getpid()) + " /dev/shm/convo.input")
+                    elif (messages[len(messages)-1]['role'] == "user"): #is the last message in messages a user message
+                        #write content of last message (from user) to /dev/shm/convo.input
+                        with open("/dev/shm/convo.input", "w") as f:
+                            f.write(messages[len(messages)-1]['content'])
+                        messages.pop()
+                    subprocess.run(['vi', "/dev/shm/convo.json"])
+                    #attempt to read /dev/shm/convo.input into myinput
+                    os.system('reset')
+                    try:
+                        with open("/dev/shm/convo.input", "r") as f:
+                            myinput = f.read()
+                            #remove single endline from end of myinput if it exists
+                            if (myinput[-1] == "\n"):
+                                myinput = myinput[:-1]
+                            #clear screen
+                            print("\033[2J\033[1;1H")
+                            #print messages
+                            printMessagesToScreen()
+                            print("pInput>>", end='', flush=True)
+                            print(myinput, end='', flush=True)
+                            dontProcessInputYet = True
+                            if (len(myinput.strip()) == 0):
+                                #dontAppendToMessages = True
+                                continue 
+                    except:
+                        myinput = ""
+                        #dontAppendToMessages = True
+                        continue
 
-            if myinput.strip().startswith(":clearkeys"):
-                #are you sure
-                print("Are you sure you want to clear keys? (y/n)")
-                response = input()
-                if response == "y":
-                    #open the config.json file, and clear the api_key_value for each provider
-                    with open(BASE_DIR/"config.json", "r") as f:
-                        config = json.load(f)
-                    for provider in config["providers"]:
-                        config["providers"][provider]["api_key_value"] = ""
-                        print("Cleared key for " + provider)
-                    with open(BASE_DIR/"config.json", "w") as f:
-                        json.dump(config, f, indent=4)
-                    print("Keys cleared\n")
-                    myinput = ""
-                    continue    
-
-            if myinput.strip().startswith(":getconfig"):
-                #get URL from user
-                url = input("Enter URL: ")
-                #get password from user w/o echo
-                import getpass
-                password = getpass.getpass("Enter password: ")  
-
-                #now build up the request as per the helpdoc
-                request = {
-                    "password": password
-                }
-                #send request to URL
-                response = requests.post(url + "/download", json=request)
-                # Write response content to file
-                if response.status_code == 200:
-
-
-                    # First write the tar file
-                    with open(BASE_DIR/"package.tar", "wb") as f:
-                        f.write(response.content)
-                        print("Tar file written to " + os.path.abspath(BASE_DIR/"package.tar"))
-                    
-                    # Then extract it
-                    import tarfile
-                    with tarfile.open(BASE_DIR/"package.tar", "r:*") as tar:
-                        tar.extractall(path=BASE_DIR)
-                        #list all files in the package directory
-
-                    
-                    #print("Files extracted to " + os.path.abspath(BASE_DIR/"package"))
-                    #print("Files in package directory:")
-                    #print(os.listdir(BASE_DIR/"package"))
-                    
-                    # Clean up the tar file
-                    os.remove(BASE_DIR/"package.tar")
-
-                    #at this point we need to modify the config.json file itself.  
-                    # Load and modify the config.json file
-                    with open(BASE_DIR/"package/config.json", "r") as f:
-                        config = json.load(f)
-
-                    # For each .key file found, update the corresponding provider's api_key_value
-                    for file in os.listdir(BASE_DIR/"package"):
-                        if file.endswith(".key"):
-                            api_key_name = file.split(".")[0].lower()  # Convert to lowercase to match provider names
-                            with open(str(BASE_DIR/"package") + "/" + file, "r") as f:
-                                api_key = f.read().strip()
-                                
-                            # If provider exists in config, as identified by provider->api_key in the json, add/update api_key_value to config.json
-                            for provider in config["providers"]:
-                                if config["providers"][provider]["api_key"].upper() == api_key_name.upper():
-                                    config["providers"][provider]["api_key_value"] = api_key
-                                    print("Configured key for " + api_key_name)
-
-                    # Write the modified config back to file
-                    with open(BASE_DIR/"package/config.json", "w") as f:
-                        json.dump(config, f, indent=4)
-
-                    os.rename(BASE_DIR/"package/config.json", BASE_DIR/"config.json")
-                    print("File updated. Location: " + os.path.abspath(BASE_DIR/"config.json") + "\n")
-
-                    init_assistantt()
-                else:
-                    print(f"Error: Server returned status code {response.status_code}")
-
-                myinput = ""
-                continue
-
-            if myinput.strip().startswith(":scribe"):
-                #check for interrupt_thread is alive or existing
-                try:
-                    if interrupt_thread.is_alive():
-                        killThread = True
-                        interrupt_thread.join()
-                except:
-                    pass
-
-                    
-                # Start the interrupt checking thread
-                #interrupt_thread = threading.Thread(target=check_for_interrupt, daemon=True)
-                #start interrupt thread where we force it to connect to transcription service
-                #by passing True to the force value that is accepted by the ccheck_for_interrupt function
-
-                scribe_config = get_transcription_config()
-                interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True, scribe_config), daemon=True)
-                interrupt_thread.start()
-
-                myinput = ""
-                continue
-
-            if myinput.strip().startswith(":vars"):
-                if myinput.strip() == ":vars":
-                    # Do we have a loaded role?
+                if myinput.strip().startswith(":hint"):
                     if isinstance(loaded_role, Role):
-                        print("Variables for loaded role:")
+                        loaded_role.id
+                        import sqlite3
+                        hint_text = replace_bash_commands(myinput.strip()[6:])
+                        conn = sqlite3.connect(BASE_DIR/'roles.db')
+                        cursor = conn.cursor()
+                        cursor.execute('INSERT INTO hints (text, role_id) VALUES (?, ?)', (hint_text, int(loaded_role.id)))
+                        conn.commit()
+                        printGrey("Inserted hint for role " + str(loaded_role.id) + "\n")
+                        conn.close()
+                    else:
+                        print("Error: no role loaded")
+                    myinput = ""
+                    continue
+
+                if myinput.strip().startswith(":clearkeys"):
+                    #are you sure
+                    print("Are you sure you want to clear keys? (y/n)")
+                    response = input()
+                    if response == "y":
+                        #open the config.json file, and clear the api_key_value for each provider
+                        with open(BASE_DIR/"config.json", "r") as f:
+                            config = json.load(f)
+                        for provider in config["providers"]:
+                            config["providers"][provider]["api_key_value"] = ""
+                            print("Cleared key for " + provider)
+                        with open(BASE_DIR/"config.json", "w") as f:
+                            json.dump(config, f, indent=4)
+                        print("Keys cleared\n")
+                        myinput = ""
+                        continue    
+
+                if myinput.strip().startswith(":getconfig"):
+                    #get URL from user
+                    url = input("Enter URL: ")
+                    #get password from user w/o echo
+                    import getpass
+                    password = getpass.getpass("Enter password: ")  
+
+                    #now build up the request as per the helpdoc
+                    request = {
+                        "password": password
+                    }
+                    #send request to URL
+                    response = requests.post(url + "/download", json=request)
+                    # Write response content to file
+                    if response.status_code == 200:
+
+
+                        # First write the tar file
+                        with open(BASE_DIR/"package.tar", "wb") as f:
+                            f.write(response.content)
+                            print("Tar file written to " + os.path.abspath(BASE_DIR/"package.tar"))
+                        
+                        # Then extract it
+                        import tarfile
+                        with tarfile.open(BASE_DIR/"package.tar", "r:*") as tar:
+                            tar.extractall(path=BASE_DIR)
+                            #list all files in the package directory
+
+                        
+                        #print("Files extracted to " + os.path.abspath(BASE_DIR/"package"))
+                        #print("Files in package directory:")
+                        #print(os.listdir(BASE_DIR/"package"))
+                        
+                        # Clean up the tar file
+                        os.remove(BASE_DIR/"package.tar")
+
+                        #at this point we need to modify the config.json file itself.  
+                        # Load and modify the config.json file
+                        with open(BASE_DIR/"package/config.json", "r") as f:
+                            config = json.load(f)
+
+                        # For each .key file found, update the corresponding provider's api_key_value
+                        for file in os.listdir(BASE_DIR/"package"):
+                            if file.endswith(".key"):
+                                api_key_name = file.split(".")[0].lower()  # Convert to lowercase to match provider names
+                                with open(str(BASE_DIR/"package") + "/" + file, "r") as f:
+                                    api_key = f.read().strip()
+                                    
+                                # If provider exists in config, as identified by provider->api_key in the json, add/update api_key_value to config.json
+                                for provider in config["providers"]:
+                                    if config["providers"][provider]["api_key"].upper() == api_key_name.upper():
+                                        config["providers"][provider]["api_key_value"] = api_key
+                                        print("Configured key for " + api_key_name)
+
+                        # Write the modified config back to file
+                        with open(BASE_DIR/"package/config.json", "w") as f:
+                            json.dump(config, f, indent=4)
+
+                        os.rename(BASE_DIR/"package/config.json", BASE_DIR/"config.json")
+                        print("File updated. Location: " + os.path.abspath(BASE_DIR/"config.json") + "\n")
+
+                        init_assistantt()
+                    else:
+                        print(f"Error: Server returned status code {response.status_code}")
+
+                    myinput = ""
+                    continue
+
+                if myinput.strip().startswith(":scribe"):
+                    #check for interrupt_thread is alive or existing
+                    try:
+                        if interrupt_thread.is_alive():
+                            killThread = True
+                            interrupt_thread.join()
+                    except:
+                        pass
+
+                        
+                    # Start the interrupt checking thread
+                    #interrupt_thread = threading.Thread(target=check_for_interrupt, daemon=True)
+                    #start interrupt thread where we force it to connect to transcription service
+                    #by passing True to the force value that is accepted by the ccheck_for_interrupt function
+
+                    scribe_config = get_transcription_config()
+                    interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True, scribe_config), daemon=True)
+                    interrupt_thread.start()
+
+                    myinput = ""
+                    continue
+
+                if myinput.strip().startswith(":vars"):
+                    if myinput.strip() == ":vars":
+                        # Do we have a loaded role?
+                        if isinstance(loaded_role, Role):
+                            print("Variables for loaded role:")
+                            for key, value in loaded_role.variables.items():
+                                print(f"{key}: {value}")
+                        myinput = ""
+                        continue
+                    else:
+                        vars_string = myinput.strip()[6:]  # Extract the variable part after ":vars"
+
+                        # Use regex to split on commas not within quotes
+                        var_key_value_pairs = re.findall(r'(\S+?)=(.*?)(?=,\s*|\s*$)', vars_string)
+
+                        for key, value in var_key_value_pairs:
+                            key = key.strip()
+                            value = value.strip()
+
+                            # Store or update the variable in the loaded role's variables
+                            if loaded_role is not None and isinstance(loaded_role, Role):
+                                loaded_role.variables[key] = value
+                            else:
+                                print("Could not load variable definitions b/c no role is loaded")
+
+                        print("Variables updated for loaded role:")
                         for key, value in loaded_role.variables.items():
                             print(f"{key}: {value}")
+
+                        myinput = ""  # Clear input after processing
+                    continue
+
+
+                    
+                if myinput.strip() == ":bash" or myinput.strip() == ":!sh":
+                    #drop to bash
+                    print()
+                    #get new PS1 so we know visually we're in a sub-bash session
+                    
+                    # Define the new PS1 setting
+                    new_ps1_setting = 'PS1="\\[\\033[01;31m\\]\\u@\\h:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "\n'
+
+                    # Read the existing .bashrc content
+                    with open(os.path.expanduser('~/.bashrc'), 'r') as bashrc_file:
+                        existing_content = bashrc_file.read()
+
+                    # Create a temporary file to hold the new content
+                    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                        # Write the existing content to the temporary file
+                        temp_file.write(existing_content.encode('utf-8'))
+
+                        # Append the new PS1 setting
+                        temp_file.write(new_ps1_setting.encode('utf-8'))
+
+                        temp_file_name = temp_file.name
+
+                    # Replace the original .bashrc with the modified one
+                    os.rename(temp_file_name, os.path.expanduser('~/.bashrc'))
+
+                    # Start a new bash session to reflect changes
+                    os.system("bash --rcfile ~/.bashrc")
+                    print()
                     myinput = ""
                     continue
-                else:
-                    vars_string = myinput.strip()[6:]  # Extract the variable part after ":vars"
-
-                    # Use regex to split on commas not within quotes
-                    var_key_value_pairs = re.findall(r'(\S+?)=(.*?)(?=,\s*|\s*$)', vars_string)
-
-                    for key, value in var_key_value_pairs:
-                        key = key.strip()
-                        value = value.strip()
-
-                        # Store or update the variable in the loaded role's variables
-                        if loaded_role is not None and isinstance(loaded_role, Role):
-                            loaded_role.variables[key] = value
-                        else:
-                            print("Could not load variable definitions b/c no role is loaded")
-
-                    print("Variables updated for loaded role:")
-                    for key, value in loaded_role.variables.items():
-                        print(f"{key}: {value}")
-
-                    myinput = ""  # Clear input after processing
-                continue
-
-
-                
-            if myinput.strip() == ":bash" or myinput.strip() == ":!sh":
-                #drop to bash
-                print()
-                #get new PS1 so we know visually we're in a sub-bash session
-                
-                # Define the new PS1 setting
-                new_ps1_setting = 'PS1="\\[\\033[01;31m\\]\\u@\\h:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ "\n'
-
-                # Read the existing .bashrc content
-                with open(os.path.expanduser('~/.bashrc'), 'r') as bashrc_file:
-                    existing_content = bashrc_file.read()
-
-                # Create a temporary file to hold the new content
-                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                    # Write the existing content to the temporary file
-                    temp_file.write(existing_content.encode('utf-8'))
-
-                    # Append the new PS1 setting
-                    temp_file.write(new_ps1_setting.encode('utf-8'))
-
-                    temp_file_name = temp_file.name
-
-                # Replace the original .bashrc with the modified one
-                os.rename(temp_file_name, os.path.expanduser('~/.bashrc'))
-
-                # Start a new bash session to reflect changes
-                os.system("bash --rcfile ~/.bashrc")
-                print()
-                myinput = ""
-                continue
 
 
 
-            #is myinput == nopaste
-            if (myinput == ":nopaste"):
-                print("Paste mode disabled")
-                paste = False
-                myinput = ""
-                continue
-
-            #is myinput == paste
-            if (myinput == ":paste"):
-                print("Paste mode enabled - (disables audio transcription)")
-                paste = True
-                myinput = ""
-                continue
-
-            # :?
-            if (len(myinput.strip()) == 2 and myinput[0] == ":" and (myinput[1] == "?")):
-                display_help()
-                myinput = ""
-                continue
-
-            if (len(myinput.strip()) > 2 and myinput[0] == ":" and (myinput[1] == "?")):
-                #this means there was more than just :?, so lets ask the AI to help
-                helptxt = get_display_help_as_txt()
-                query = myinput[2:].strip()
-                myinput = helptxt + "\n" + query + "Above is the user help text followed by a query from the user - can you please respond? This is to help them use the program they are currently using to communicate with (you)"
-
-            
-            # :s
-            if (len(myinput.strip()) > 3 and myinput[0] == ":" and myinput[1] == "s" and myinput[2] == " "):
-                """
-                Search for conversations matching the string after :s
-                """
-                # What we want to do here is take any text after :s and pull files etc
-                # If myinput[2:] is surrounded by quotes, then we want to match the exact string but remove quotes first
-                #dlog("searching for files matching " + myinput[2:].strip())
-                if (myinput[2] == '"' and myinput[-1] == '"'):
-                    matchedfiles = get_files_collection(myinput[3:-1].strip())
-                else:
-                    matchedfiles = get_files_collection(myinput[2:].strip())
-                #dlog("found a total of " + str(len(matchedfiles)-1) + " files matching " + myinput[2:])
-                refreshUI_from_last_file(matchedfiles, True)
-                # Make terminal print yellow
-                files_cursor = 0
-                printYellow("Found " + str(len(matchedfiles)) + " files matching '" + myinput[2:].strip() + "'\n")
-
-                #dontAppendToMessages = True
-                myinput = ""
-                continue 
-
-            # :x [num] for max
-            if (len(myinput) > 3 and myinput[:3] == ":x "):
-                """
-                This limits the number of messages that are sent to the AI. i.e. last 10 messages
-                user types :x 4 to only ever send last 4 messages
-                """
-                try:
-                    max_messages = int(myinput[3:].strip())
-                    if (max_messages < 1):
-                        raise ValueError
-                    args.max = max_messages
-                except ValueError:
-                    print("Invalid max message memory\n")
+                #is myinput == nopaste
+                if (myinput == ":nopaste"):
+                    print("Paste mode disabled")
+                    paste = False
                     myinput = ""
                     continue
-                print("Set max message memory to: " + str(max_messages))
-                myinput = ""
-                #get message that is the first message in the conversation, per the args.max
-                if (len(messages) > args.max):
-                    printYellow(messages[len(messages)-args.max]['content'])  #print oldest message to be sent to AI based on args.max
-                continue
 
-            if myinput.strip() == ":x": #just :x no value
-                #do awawy with args.max
-                args.max = None
-                printYellow("Max message memory removed - total of " + str(len(messages)) + " messages\n")
-                myinput = ""
-                continue
-
-
-            # :w
-            if (len(myinput.strip()) > 2 and myinput[0] == ":" and myinput[1] == "w" and myinput[2] == " "):
-                #get what comes after :w and strip it
-                file = myinput[2:].strip()
-                #does the file exist
-                try:
-                    if os.path.exists(file):
-                        backupFile(file)
-                        #now write the conversation to the file
-                        outputConversationToFile(file)
-                        print()
-                    else: #write it
-                        outputConversationToFile(file)
-                    printGrey("Wrote conversation to " + file) #todo why don't we see the output of this during usage?
-                        
-                except Exception as e:
-                    print("Error writing to file: " + str(e))
-                    pass
-                print()
-                myinput = ""
-                continue
-            elif (len(myinput.strip()) == 2 and myinput[0] == ":" and myinput[1] == "w"):
-                #write the conversation to the current file
-                outputConversationToFile(files[files_cursor])
-                printGrey("Wrote conversation to " + str(files[files_cursor]) + "\n") #todo refactor this method against using currFileName like :o does
-                myinput = ""
-                continue
-
-
-            #:o 
-            if (myinput.strip() == ":o"):
-                """
-                This writes the current conversation to a file, in plain text, not JSON
-                """
-                #the user may just type :o in which case we write the convo to the current file
-                #the user may type :o filename.json in which case we write the convo to filename.json
-                #the user may type :o filename.json and then a number to indicate how many messages back to write, in which case, do not use JSON
-
-                #convert myinput any multiple spaces to a single space
-                myinput = re.sub(' +', ' ', myinput)
-                #split myinput on spaces
-                words = myinput.split(" ")
-                myinput = ""
-
-                #if there is only one word, then we just write to the current file
-                if (len(words) == 1):
-                    #write the conversation to the current file
-                    outputConversationToFile(currFileName)
+                #is myinput == paste
+                if (myinput == ":paste"):
+                    print("Paste mode enabled - (disables audio transcription)")
+                    paste = True
+                    myinput = ""
                     continue
 
-                #if there are two words, then we write to the file specified
-                if (len(words) == 2):
-                    #write the conversation to the file specified
-                    outputConversationToFile(words[1])
+                # :?
+                if (len(myinput.strip()) == 2 and myinput[0] == ":" and (myinput[1] == "?")):
+                    display_help()
+                    myinput = ""
                     continue
 
-                if (len(words) == 3):
-                    #write the conversation to the file specified, but only the last n messages
+                if (len(myinput.strip()) > 2 and myinput[0] == ":" and (myinput[1] == "?")):
+                    #this means there was more than just :?, so lets ask the AI to help
+                    helptxt = get_display_help_as_txt()
+                    query = myinput[2:].strip()
+                    myinput = helptxt + "\n" + query + "Above is the user help text followed by a query from the user - can you please respond? This is to help them use the program they are currently using to communicate with (you)"
+
+                
+                # :s
+                if (len(myinput.strip()) > 3 and myinput[0] == ":" and myinput[1] == "s" and myinput[2] == " "):
+                    """
+                    Search for conversations matching the string after :s
+                    """
+                    # What we want to do here is take any text after :s and pull files etc
+                    # If myinput[2:] is surrounded by quotes, then we want to match the exact string but remove quotes first
+                    #dlog("searching for files matching " + myinput[2:].strip())
+                    if (myinput[2] == '"' and myinput[-1] == '"'):
+                        matchedfiles = get_files_collection(myinput[3:-1].strip())
+                    else:
+                        matchedfiles = get_files_collection(myinput[2:].strip())
+                    #dlog("found a total of " + str(len(matchedfiles)-1) + " files matching " + myinput[2:])
+                    refreshUI_from_last_file(matchedfiles, True)
+                    # Make terminal print yellow
+                    files_cursor = 0
+                    printYellow("Found " + str(len(matchedfiles)) + " files matching '" + myinput[2:].strip() + "'\n")
+
+                    #dontAppendToMessages = True
+                    myinput = ""
+                    continue 
+
+                # :x [num] for max
+                if (len(myinput) > 3 and myinput[:3] == ":x "):
+                    """
+                    This limits the number of messages that are sent to the AI. i.e. last 10 messages
+                    user types :x 4 to only ever send last 4 messages
+                    """
                     try:
-                        num = int(words[2])
-                        outputMessagesToFile(words[1], num)
+                        max_messages = int(myinput[3:].strip())
+                        if (max_messages < 1):
+                            raise ValueError
+                        args.max = max_messages
+                    except ValueError:
+                        print("Invalid max message memory\n")
+                        myinput = ""
                         continue
-                    except: 
-                        print("Invalid number of messages to write") 
+                    print("Set max message memory to: " + str(max_messages))
+                    myinput = ""
+                    #get message that is the first message in the conversation, per the args.max
+                    if (len(messages) > args.max):
+                        printYellow(messages[len(messages)-args.max]['content'])  #print oldest message to be sent to AI based on args.max
+                    continue
 
-            # :m [model] - accepts either model number or name
-            if (len(myinput) > 3 and myinput[:3] == ":m "):
-                #is it a numeral
-                if (myinput[3:].strip().isdigit()):
-                    model_name = get_model_name_from_numbered_list(int(myinput[3:].strip()))
-                else:
-                    model_name = get_model_name_from_list(myinput[3:].strip())
-                if model_name is None:
-                    print("\nModel not found\n")
-                else:
-                    print("\nModel changed from "+args.model+" to: " + model_name + "\n")
-                    args.model = model_name
-                    init_assistantt(args.model) # Assuming this function initializes the assistant with the new model
-                myinput = ""
-                continue
-            elif (len(myinput) >= 2 and myinput[:2] == ":m"):
-                print()
-                print_models(True)
-                print()
-                myinput = ""
-                continue
+                if myinput.strip() == ":x": #just :x no value
+                    #do awawy with args.max
+                    args.max = None
+                    printYellow("Max message memory removed - total of " + str(len(messages)) + " messages\n")
+                    myinput = ""
+                    continue
 
-            # :c
-            if (myinput == ":c"):
-                f = outputConversationToFile()  # Assuming this function outputs the conversation to a file
-                print("Copied conversation to new file " + str(f))
-                myinput = ""
-                continue
 
-            # :t [temperature]
-            if (len(myinput) > 3 and myinput[:3] == ":t "):
-                """
-                This sets the temperature for the AI
-                """
-                try:
-                    temp = float(myinput[3:].strip())
-                    if (temp > 2.0 or temp < 0.0):
+                # :w
+                if (len(myinput.strip()) > 2 and myinput[0] == ":" and myinput[1] == "w" and myinput[2] == " "):
+                    #get what comes after :w and strip it
+                    file = myinput[2:].strip()
+                    #does the file exist
+                    try:
+                        if os.path.exists(file):
+                            backupFile(file)
+                            #now write the conversation to the file
+                            outputConversationToFile(file)
+                            print()
+                        else: #write it
+                            outputConversationToFile(file)
+                        printGrey("Wrote conversation to " + file) #todo why don't we see the output of this during usage?
+                            
+                    except Exception as e:
+                        print("Error writing to file: " + str(e))
+                        pass
+                    print()
+                    myinput = ""
+                    continue
+                elif (len(myinput.strip()) == 2 and myinput[0] == ":" and myinput[1] == "w"):
+                    #write the conversation to the current file
+                    outputConversationToFile(files[files_cursor])
+                    printGrey("Wrote conversation to " + str(files[files_cursor]) + "\n") #todo refactor this method against using currFileName like :o does
+                    myinput = ""
+                    continue
+
+
+                #:o 
+                if (myinput.strip() == ":o"):
+                    """
+                    This writes the current conversation to a file, in plain text, not JSON
+                    """
+                    #the user may just type :o in which case we write the convo to the current file
+                    #the user may type :o filename.json in which case we write the convo to filename.json
+                    #the user may type :o filename.json and then a number to indicate how many messages back to write, in which case, do not use JSON
+
+                    #convert myinput any multiple spaces to a single space
+                    myinput = re.sub(' +', ' ', myinput)
+                    #split myinput on spaces
+                    words = myinput.split(" ")
+                    myinput = ""
+
+                    #if there is only one word, then we just write to the current file
+                    if (len(words) == 1):
+                        #write the conversation to the current file
+                        outputConversationToFile(currFileName)
+                        continue
+
+                    #if there are two words, then we write to the file specified
+                    if (len(words) == 2):
+                        #write the conversation to the file specified
+                        outputConversationToFile(words[1])
+                        continue
+
+                    if (len(words) == 3):
+                        #write the conversation to the file specified, but only the last n messages
+                        try:
+                            num = int(words[2])
+                            outputMessagesToFile(words[1], num)
+                            continue
+                        except: 
+                            print("Invalid number of messages to write") 
+
+                # :m [model] - accepts either model number or name
+                if (len(myinput) > 3 and myinput[:3] == ":m "):
+                    #is it a numeral
+                    if (myinput[3:].strip().isdigit()):
+                        model_name = get_model_name_from_numbered_list(int(myinput[3:].strip()))
+                    else:
+                        model_name = get_model_name_from_list(myinput[3:].strip())
+                    if model_name is None:
+                        print("\nModel not found\n")
+                    else:
+                        print("\nModel changed from "+args.model+" to: " + model_name + "\n")
+                        args.model = model_name
+                        init_assistantt(args.model) # Assuming this function initializes the assistant with the new model
+                    myinput = ""
+                    continue
+                elif (len(myinput) >= 2 and myinput[:2] == ":m"):
+                    print()
+                    print_models(True)
+                    print()
+                    myinput = ""
+                    continue
+
+                # :c
+                if (myinput == ":c"):
+                    f = outputConversationToFile()  # Assuming this function outputs the conversation to a file
+                    print("Copied conversation to new file " + str(f))
+                    myinput = ""
+                    continue
+
+                # :t [temperature]
+                if (len(myinput) > 3 and myinput[:3] == ":t "):
+                    """
+                    This sets the temperature for the AI
+                    """
+                    try:
+                        temp = float(myinput[3:].strip())
+                        if (temp > 2.0 or temp < 0.0):
+                            print("Invalid temperature")
+                        else:
+                            args.temperature = temp
+                            print("Temperature changed to: " + str(args.temperature))
+                    except ValueError:
                         print("Invalid temperature")
-                    else:
-                        args.temperature = temp
-                        print("Temperature changed to: " + str(args.temperature))
-                except ValueError:
-                    print("Invalid temperature")
-                myinput = ""
-                continue
+                    myinput = ""
+                    continue
 
-            if myinput.strip() == ":system":
-                for message in messages:
-                    if (message['role'] == 'system'):
-                        printYellow("\n" + message['content'] + "\n")
-                        break
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":first" or myinput.strip() == ":last":
-                print("Not yet implemented.\n")
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":sysedit":
-                msg = getPreProcessedSystemMessage()
-
-                with open("/dev/shm/delme", "w") as f:
-                    msg = replace_bash_commands(msg).strip()
-                    f.write(msg)
-                subprocess.run(['vi', "/dev/shm/delme"])
-                #attempt to read /dev/shm/convo.input into myinput
-                try:
-                    with open("/dev/shm/delme", "r") as f:
-                        msg = f.read()
-                    args.system = msg
-                    #msg = replace_bash_commands(msg).strip()
-                    hasSystemMessage = False
+                if myinput.strip() == ":system":
                     for message in messages:
-                        if message["role"] == "system":
-                            message["content"] = msg
-                            hasSystemMessage = True
+                        if (message['role'] == 'system'):
+                            printYellow("\n" + message['content'] + "\n")
                             break
-                    if not hasSystemMessage:
-                        #append to top of array
-                        messages.insert(0, {"role": "system", "content": msg})
-
-                except:
-                    pass
-                print("loaded system message\n")
-                myinput = ""
-                continue
-
-            #:add 
-            if (len(myinput) == 4 and myinput[:4] == ":add") or (len(myinput) > 5 and myinput[:5] == ":add "):
-                #if the last message is an assistant message, remove it from messages
-                if (len(messages) > 0 and messages[-1]['role'] == "assistant"):
-                    messages.pop()
-                
-                #is the last message a user message?
-                if not (len(messages) > 0 and messages[-1]['role'] == "user"):
-                    print("No user message to rerun")
-                    myinput = ""
-                    continue
-                else:
-                    str_after_command = myinput[5:].strip()
-                    #now append to content of last message
-                    messages[-1]['content'] += " " + str_after_command
-                    myinput = messages[-1]['content']
-                    #now remove that message from messages array since we're rerunning
-                    messages.pop()
-                #now rewrite messages to screen
-                #print("\033[2J\033[1;1H") #clear screen
-                printMessagesToScreen(True, False, "Input>>" + myinput)
-
-
-
-            if myinput.startswith(":redo"):
-                # Check if there's a user message to rerun
-                if not (len(messages) > 1 and messages[-2]['role'] == "user"):
-                    print("No user message to rerun")
                     myinput = ""
                     continue
 
-                # Last message must be assistant
-                if len(messages) > 0 and messages[-1]['role'] == "assistant":
-                    str_after_command = myinput[6:].strip()
-                    filetext = ""
-
-                    if str_after_command == "":
-                        # Write the last user message to /dev/shm/lusertemp
-                        with open("/dev/shm/lusertemp", "w", encoding='utf-8') as f:
-                            f.write(messages[-2]['content'])
-
-                        # Open vi (consider using subprocess for better handling)
-                        subprocess.run(['vi', "/dev/shm/lusertemp"])
-
-                        # Read the file back into myinput
-                        with open("/dev/shm/lusertemp", "r", encoding='utf-8') as f:
-                            filetext = f.read()
-
-                        # Check if the message has changed
-                        if filetext.strip() == messages[-2]['content'].strip():
-                            print("No changes made to user message\n")
-                            myinput = ""
-                            continue
-                        myinput = filetext
-                    else:
-                        myinput = messages[-2]['content'] + " " + str_after_command
-                        
-
-                    # Remove the last assistant message
-                    if len(messages) > 0 and messages[-1]['role'] == "assistant":
-                        messages.pop()
-
-                    # Remove the user message from messages array since we're rerunning
-                    messages.pop()
-
-                # Print messages to screen
-                printMessagesToScreen(True, False, "bInput>>" + myinput)
-
-                
-                
-            if myinput.strip() == ":refresh":
-                printMessagesToScreen(True, False)
-                print()
-                myinput = ""
-                continue
-
-
-            #:redo (same as :add but doesn't append to last user message, overwrites it)
-            if False and (len(myinput) == 5 and myinput[:5] == ":redo") or (len(myinput) > 6 and myinput[:6] == ":redo "): #TODO can we simplify this if staetemtn
-                #if the last message is an assistant message, remove it from messages
-                
-                #is the last message a user message?
-                if not (len(messages) > 1 and messages[-2]['role'] == "user"):
-                    print("No user message to rerun")
+                if myinput.strip() == ":first" or myinput.strip() == ":last":
+                    print("Not yet implemented.\n")
                     myinput = ""
                     continue
-                elif (len(messages) > 0 and messages[-1]['role'] == "assistant"):
-                    str_after_command = myinput[6:].strip()
-                    #is it empty?
-                    filetext = ""
-                    if (str_after_command == ""):
-                        #write the last user message to /dev/shm/lusertemp
-                        with open("/dev/shm/lusertemp", "w") as f:
-                            f.write(messages[-2]['content'])
-                        #open vi
-                        subprocess.run(['vi', "/dev/shm/lusertemp"])
-                        #read the file back into myinput
-                        with open("/dev/shm/lusertemp", "r") as f:
-                            filetext = f.read()
 
-                        #wait but is filetext the same as the original message?
-                        if (filetext.strip() == messages[-2]['content'].strip()):
-                            print("No changes made to user message\n")
-                            myinput = ""
-                            continue
-                        myinput = filetext
+                if myinput.strip() == ":sysedit":
+                    msg = getPreProcessedSystemMessage()
 
+                    with open("/dev/shm/delme", "w") as f:
+                        msg = replace_bash_commands(msg).strip()
+                        f.write(msg)
+                    subprocess.run(['vi', "/dev/shm/delme"])
+                    #attempt to read /dev/shm/convo.input into myinput
+                    try:
+                        with open("/dev/shm/delme", "r") as f:
+                            msg = f.read()
+                        args.system = msg
+                        #msg = replace_bash_commands(msg).strip()
+                        hasSystemMessage = False
+                        for message in messages:
+                            if message["role"] == "system":
+                                message["content"] = msg
+                                hasSystemMessage = True
+                                break
+                        if not hasSystemMessage:
+                            #append to top of array
+                            messages.insert(0, {"role": "system", "content": msg})
+
+                    except:
+                        pass
+                    print("loaded system message\n")
+                    myinput = ""
+                    continue
+
+                #:add 
+                if (len(myinput) == 4 and myinput[:4] == ":add") or (len(myinput) > 5 and myinput[:5] == ":add "):
+                    #if the last message is an assistant message, remove it from messages
                     if (len(messages) > 0 and messages[-1]['role'] == "assistant"):
                         messages.pop()
-                        
-                    #now remove that user message from messages array since we're rerunning
-                    messages.pop()
-                else:
-                    #TODO this really should handle the case for if the last message is a user message... it's unlikely
-                    #but there's realy no reason not to and it should really be refactored with the previous elif
-                    pass
-                #now rewrite messages to screen
-                printMessagesToScreen(True, False, "Input>>" + myinput)
-                
-                
-            if myinput.strip() == ":remresp": 
-                #remove the JSON after "RESPONSE: " in the previous user message (which is actually tool output)
-                #but if no such pattern/message exists then just output that there was nothing to remove
-                #and if the message is in fact there, then remove it and output that it was removed, and in the 
-                #message from which it was removed, output that it was removed in place of the content that was removed
-
-                last_user_message_index = len(messages) - 1
-                #now, starting from last_user_message_index, go backwards until you find a user message
-                while last_user_message_index >= 0 and messages[last_user_message_index]['role'] != "user":
-                    last_user_message_index -= 1
-                #if last_user_message_index is less than 0, then there are no user messages to remove the response from
-                if last_user_message_index < 0:
-                    print("No user messages to remove responses from")
-                else:
-                    #messages[last_user_message_index]['content'] = messages[last_user_message_index]['content'].split("RESPONSE: ")[0] + "RESPONSE: [removed by user for effiency]"
-                    #first see if RESPONSE: is in the message
-                    #remove everything after the last 'RESPONSE: ' and replace it with 'RESPONSE: [removed by user for effiency]'
-                    if "RESPONSE: " in messages[last_user_message_index]['content']:
-                        #get first 64 chars of string to remove
-                        first_64_chars = messages[last_user_message_index]['content'].split("RESPONSE: ")[0][:64]
-                        messages[last_user_message_index]['content'] = messages[last_user_message_index]['content'].split("RESPONSE: ")[0] + "RESPONSE: [removed by user for effiency]"
-                        print("Removed response from previous user message, which began with 'RESPONSE: '" + first_64_chars) 
+                    
+                    #is the last message a user message?
+                    if not (len(messages) > 0 and messages[-1]['role'] == "user"):
+                        print("No user message to rerun")
+                        myinput = ""
+                        continue
                     else:
-                        print("No response to remove from previous user message.")
-                print()
-                myinput = ""
-                continue
+                        str_after_command = myinput[5:].strip()
+                        #now append to content of last message
+                        messages[-1]['content'] += " " + str_after_command
+                        myinput = messages[-1]['content']
+                        #now remove that message from messages array since we're rerunning
+                        messages.pop()
+                    #now rewrite messages to screen
+                    #print("\033[2J\033[1;1H") #clear screen
+                    printMessagesToScreen(True, False, "Input>>" + myinput)
 
-            #:rolelist
-            if myinput.strip() == (":rolelist"):
-                printRoleInfo()
-                print()
 
-            if myinput.strip() == ":nobash":
-                #global args
-                args.nobash = True
-                printGrey("Diable {{}} processing")
-                continue
 
-            if myinput.strip() == ":yesbash":
-                #global args
-                args.nobash = False
-                printGrey("Enable {{}} processing")
-                continue
+                if myinput.startswith(":redo"):
+                    # Check if there's a user message to rerun
+                    if not (len(messages) > 1 and messages[-2]['role'] == "user"):
+                        print("No user message to rerun")
+                        myinput = ""
+                        continue
 
-            #:roleedit
-            if myinput.strip() == ":roleedit":
-                try:
-                    if not isinstance(loaded_role, Role):
-                        printYellow("No role currently loaded or the loaded role is not of the correct type.\n")
-                    else:
-                        thfile = loaded_role.rolefile
-                        if thfile:
-                            edit_role(thfile)
-                            # Optionally, reload the role after editing
-                            reloaded_role = load_role(loaded_role.name)
-                            if reloaded_role:
-                                loaded_role = reloaded_role
-                                printGreen(f"Role '{loaded_role.name}' has been reloaded after editing.\n")
-                            else:
-                                printRed(f"Failed to reload role '{loaded_role.name}' after editing.\n")
+                    # Last message must be assistant
+                    if len(messages) > 0 and messages[-1]['role'] == "assistant":
+                        str_after_command = myinput[6:].strip()
+                        filetext = ""
+
+                        if str_after_command == "":
+                            # Write the last user message to /dev/shm/lusertemp
+                            with open("/dev/shm/lusertemp", "w", encoding='utf-8') as f:
+                                f.write(messages[-2]['content'])
+
+                            # Open vi (consider using subprocess for better handling)
+                            subprocess.run(['vi', "/dev/shm/lusertemp"])
+
+                            # Read the file back into myinput
+                            with open("/dev/shm/lusertemp", "r", encoding='utf-8') as f:
+                                filetext = f.read()
+
+                            # Check if the message has changed
+                            if filetext.strip() == messages[-2]['content'].strip():
+                                print("No changes made to user message\n")
+                                myinput = ""
+                                continue
+                            myinput = filetext
                         else:
-                            printYellow("The current role doesn't have an associated file, attempting DB\n")
-                            edit_role_in_db(loaded_role.name)
-                except Exception as e:
-                    printRed(f"Error: {str(e)}\n")
-                myinput = ""
-                continue
+                            myinput = messages[-2]['content'] + " " + str_after_command
                             
-            #:role
-            if myinput.strip() == ":role":
-                printRoleInfo()
-                myinput = ""
-                continue
-        
-            if myinput.strip().startswith(":role "):
-                first_word_after = myinput.strip().split(" ")[1].strip()
-                if len(first_word_after) > 0:
-                    load_role(first_word_after)
-                myinput = ""
-                continue
-        
-            if myinput.strip() == ":rolesave":
-                save_role()
-                myinput = ""
-                continue
-            
 
-            if myinput.strip() == ":alltools":
-                refreshTools(True)
-                myinput = ""
-                continue
+                        # Remove the last assistant message
+                        if len(messages) > 0 and messages[-1]['role'] == "assistant":
+                            messages.pop()
 
-            if myinput.strip() == ":savetools": 
-                # Save active tools to the specified filename
-                try:
-                    filename = myinput[11:].strip()  # Get filename after ":savetools "
-                    writeActiveCanonicalNamesToFile(fBASE_DIR/'tools/collections/{filename}')
-                    print(f"Tools saved to "+BASE_DIR/"tools/collections/{filename}\n")
-                except Exception as e:
-                    print(f"Error saving tools: {e}")
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":loadtools":
-                # Load tools from the specified filename
-                try:
-                    filename = myinput[11:].strip()  # Get filename after ":loadtools "
-                    deactivateAllToolsInArgsToolsArray() #TODO refactor to use the other deactivateTools method
-                    tools = getCanonicalToolsNamesFromFile(fBASE_DIR/'tools/collections/{filename}')
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print(f"\nTools loaded from "+BASE_DIR/"tools/collections/{filename}\n")
-                except Exception as e:
-                    print(f"Error loading tools: {e}")
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":notools":
-                deactivateTools()
-                printYellow("Deactivated tools\n")
-                force_tools_flag = False
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":onlytools":
-                print("Only tools\n")
-                force_tools_flag = True
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":noonlytools":
-                print("No only tools\n")
-                force_tools_flag = False
-                myinput = ""
-                continue
-
-            if ":toolsjust " in myinput.strip() and myinput.startswith(":toolsjust"):
-                #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
-                tools = myinput.strip()[11:].split(" ")
-                if len(tools) > 0 and ":toolsjust " in myinput.strip():
-                    print(myinput.strip())
-                    print()
-                    deactivateAllToolsInArgsToolsArray()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print()
-                    with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
-                        file.truncate(0)
-                myinput = ""
-                continue
-            
-            if ":tools" in myinput.strip() and myinput.startswith(":tools"):
-                #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
-                tools = myinput.strip()[7:].split(" ")
-                if len(tools) > 0 and ":tools " in myinput.strip():
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print()
-                else:
-                    # Load the tools from the deactivated tools file
-                    deactivated_tools = getDeactivatedCanonicalNamesFromFile()
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(deactivated_tools, True)
-                    printActiveTools()
-                    print()
-                    #writeActiveCanonicalNamesToFile()
-                    with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
-                        file.truncate(0)
-                myinput = ""
-                continue
-
-            #AI ultimately for a handoff to occur bewtween 2 roles, there needs to be an even greater/broader definition given to the 'state' of that role to include tools (including instantiated classes if any), conversation state, and I can't think of anything else but if you have ideas let me know
-
-            
-            #AI syscolon files i think may fall by the wayside (below this)
-            #deal with syscolon files
-            #if myinput.startswith(":"):
-                    
-            #:role
-            if myinput.strip() == ":role":
-                printRoleInfo()
-                myinput = ""
-                continue
-        
-            if myinput.strip().startswith(":role "):
-                first_word_after = myinput.strip().split(" ")[1].strip()
-                if len(first_word_after) > 0:
-                    load_role(first_word_after)
-                myinput = ""
-                continue
-        
-            if myinput.strip() == ":rolesave":
-                save_role()
-                myinput = ""
-                continue
-            
-
-            if myinput.strip() == ":alltools":
-                refreshTools(True)
-                myinput = ""
-                continue
-
-            if ":savetools" in myinput and myinput.startswith(":savetools"):
-                # Save active tools to the specified filename
-                try:
-                    filename = myinput[11:].strip()  # Get filename after ":savetools "
-                    writeActiveCanonicalNamesToFile(fBASE_DIR/'tools/collections/{filename}')
-                    print(f"Tools saved to "+BASE_DIR/"tools/collections/{filename}\n")
-                except Exception as e:
-                    print(f"Error saving tools: {e}")
-                myinput = ""
-                continue
-
-            if ":loadtools" in myinput and myinput.startswith(":loadtools"):
-                # Load tools from the specified filename
-                try:
-                    filename = myinput[11:].strip()  # Get filename after ":loadtools "
-                    deactivateAllToolsInArgsToolsArray() #TODO refactor to use the other deactivateTools method
-                    tools = getCanonicalToolsNamesFromFile(BASE_DIR/'tools/collections/{filename}')
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print(f"\nTools loaded from "+BASE_DIR/"tools/collections/{filename}\n")
-                except Exception as e:
-                    print(f"Error loading tools: {e}")
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":notools":
-                deactivateTools()
-                printYellow("Deactivated tools\n")
-                force_tools_flag = False
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":onlytools":
-                print("Only tools\n")
-                force_tools_flag = True
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":noonlytools":
-                print("No only tools\n")
-                force_tools_flag = False
-                myinput = ""
-                continue
-
-            if ":toolsjust" in myinput.strip() and myinput.startswith(":toolsjust"):
-                #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
-                tools = myinput.strip()[11:].split(" ")
-                if len(tools) > 0 and ":toolsjust " in myinput.strip():
-                    print(myinput.strip())
-                    print()
-                    deactivateAllToolsInArgsToolsArray()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print()
-                    with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
-                        file.truncate(0)
-                myinput = ""
-                continue
-            
-            if ":tools" in myinput.strip() and myinput.startswith(":tools"):
-                #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
-                tools = myinput.strip()[7:].split(" ")
-                if len(tools) > 0 and ":tools " in myinput.strip():
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
-                    print()
-                else:
-                    # Load the tools from the deactivated tools file
-                    deactivated_tools = getDeactivatedCanonicalNamesFromFile()
-                    print()
-                    activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(deactivated_tools, True)
-                    printActiveTools()
-                    print()
-                    #writeActiveCanonicalNamesToFile()
-                    with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
-                        file.truncate(0)
-                myinput = ""
-                continue
-
-            
-            #AI syscolon files i think may fall by the wayside (below this)
-            #deal with syscolon files
-            if myinput.startswith(":"):
-                # Split the input into command and the rest of the message
-                command_and_message = myinput[1:].strip().split(" ", 1)
-                command = command_and_message[0]  # This will be 'thing' in the example
-                message = command_and_message[1] if len(command_and_message) > 1 else ""  # The rest of the message
-
-                # Check if command (fne) exists in content_dict
-                if command in syscontent_dict:
-                    content = f"{syscontent_dict[command]} {message}"
-                    if not messages:
-                        # If messages is empty, add a new system message
-                        messages.append({'role': 'system', 'content': content})
-                    elif messages[0]['role'] == 'system':
-                        # If the first message is system, append to it
-                        messages[0]['content'] = f"{messages[0]['content']}\n{content}"
-                    else:
-                        # If the first message is not system, insert a new system message
-                        messages.insert(0, {'role': 'system', 'content': content})
-                    print("Added " + command + " content to system message\n")
-
-                    myinput = ""
-                    continue
-                else:
-                    pass
-
-            #deal with colon files
-            if myinput.startswith(":"):
-                # Split the input into command and the rest of the message
-                command_and_message = myinput[1:].strip().split(" ", 1)
-                command = command_and_message[0]  # This will be 'thing' in the example
-                message = command_and_message[1] if len(command_and_message) > 1 else ""  # The rest of the message
-
-                # Check if command (fne) exists in content_dict
-                if command in syscontent_dict:
-                    # Prepend the content from the corresponding file to the message
-                    myinput = f"{syscontent_dict[command]} {message}" #TODO i tihnk this is supposed to be system message...
-                elif command in content_dict:
-                    # Prepend the content from the corresponding file to the message
-                    myinput = f"{content_dict[command]} {message}"
-                    pass
-
-            if ":toolslist" == myinput.strip():
-                refreshTools()
-                console = Console()
-                table = Table(show_header=False, box=None, padding=(0, 1), expand=True)
-                table.add_column("Canonical Name", style="bold", ratio=1.5)
-                table.add_column("Description", ratio=2)
-                table.add_column("Parameters", ratio=1.5)
-                for tool in args.tools_array: #AI this is a great example below of how to approach tools_array, which holds the tools passed to the LLM
-                    name_color = "yellow" if tool["active"] else "grey"
-                    desc_color = "bright_white" if args.tools_array.index(tool) % 2 == 0 else "white"
-                    params = ", ".join(tool['function']['parameters']['properties'].keys())
-                    table.add_row(
-                        Text(tool['canonical_name'], style=name_color),
-                        Text(tool['function']['description'], style=desc_color, overflow="ellipsis"),
-                        Text(params, style=desc_color, overflow="ellipsis")
-                    )
-                console.print(table)
-                myinput = ""
-                continue
-
-                            
-            showtools = False
-            showinactivetools = False
-            if (myinput.strip() == ":toolsall") or (myinput.strip() == ":tools"):
-                print("HIHIHIHI")
-                showtools = True
-                if myinput.strip() == ":toolsall":
-                    refreshTools(args.tools)
-                    showinactivetools = True
-            if showtools:
-                console = Console()
-                table = Table(title="Available Tools", show_header=True, header_style="bold green")
-
-                #do that aghain but make it all % of like terminal width pelase
-                try:
-                    terminal_width = shutil.get_terminal_size().columns
-                    name_width = int(terminal_width * 0.3)
-                    desc_width = int(terminal_width * 0.5)
-                    param_width = int(terminal_width * 0.2)
-                except:
-                    name_width = 32
-                    desc_width = 80
-                    param_width = 50
-
-                table.add_column("Name", style="white", width=name_width)
-                table.add_column("Description", width=desc_width)
-                table.add_column("Parameters", width=param_width)
-
-                index = 0
-
-                for index, tool in enumerate(args.tools_array):
-                    function = tool['function']
-                    name = function['name']
-                    canonical_name = tool['canonical_name']
-                    description = function['description']
-                    params = function['parameters']['properties']
-                    param_details = ", ".join([f"{k}: {v['description']}" for k, v in params.items()])
-
-                    # Alternate brightness for description and parameters
-                    description_style = "grey" if index % 2 == 0 else "white"
-                    param_style = "grey" if index % 2 == 0 else "white"
-
-                
-
-                    #add a row but this time with the active status as per the args.tools_array[index]["active"]
-                    if showinactivetools: #do the flow where we DO show an index b/c that's the index we'd want them to do activate/deactivate on
-                        if args.tools_array[index]["active"]:
-                            table.add_row(
-                                f"{str(index)}. [green]{canonical_name}[/green]",
-                                f"[{description_style}]{description}[/{description_style}]",
-                                f"[{param_style}]{param_details}[/{param_style}]"
-                            )
-                        else:
-                            table.add_row(
-                                f"{str(index)}. [red]{canonical_name}[/red]",
-                                f"[{description_style}]{description}[/{description_style}]",
-                                f"[{param_style}]{param_details}[/{param_style}]"
-                            )
-                    else:
-                        if args.tools_array[index]["active"]:
-                            table.add_row(
-                                f"[yellow]{canonical_name}[/yellow]",
-                                f"[{description_style}]{description}[/{description_style}]",
-                                f"[{param_style}]{param_details}[/{param_style}]"
-                            )
-
-                    index += 1
-                console.print(table)
-                myinput = ""
-                continue
-
-            if myinput.strip() == ":noimages":
-                modified = False
-                new_messages = []
-                
-                for message in messages:
-                    new_message = message.copy()
-                    
-                    if message.get('content') and isinstance(message['content'], list):
-                        new_content = []
-                        for content_item in message['content']:
-                            if isinstance(content_item, dict) and content_item.get('type') == 'image_url':
-                                new_content.append({'type': 'text', 'text': '[Image removed from conversation history to save context]'})
-                                modified = True
-                            else:
-                                new_content.append(content_item)
-                        new_message['content'] = new_content
-                    
-                    new_messages.append(new_message)
-                
-                messages[:] = new_messages
-                
-                if modified:
-                    print("Removed image data from conversation history\n") 
-                else:
-                    print("No image data found in conversation history\n")
-                myinput = ""
-                continue
-
-
-
-            # :url [URL]
-            if (len(myinput) > 5 and myinput[:5] == ":url "):
-                url = myinput[5:].strip()
-                urltext = url_to_text(url)  # Assuming this function fetches and returns the text from the URL
-                # Now save that urltext to a file in /dev/shm
-                with open("/dev/shm/url.txt", "w") as f:
-                    f.write(urltext)
-
-                # If the file exists, remove it
-                if os.path.exists("/dev/shm/convo.input"):
-                    os.remove("/dev/shm/convo.input")
-
-                # Is the last message in messages a user message
-                if (messages and messages[-1]['role'] == "user"):
-                    # Write content of last message (from user) to /dev/shm/convo.input
-                    with open("/dev/shm/convo.input", "w") as f:
-                        f.write(messages[-1]['content'])
-                    messages.pop()
-                elif urltext is not None:
-                    # Remove excessive blank lines from urltext
-                    urltext = re.sub(r'\n\s*\n', '\n\n', urltext)
-                    with open("/dev/shm/convo.input", "w") as f:
-                        f.write(urltext)
-                else:
-                    print("Could not retrieve URL")
-                    continue
-
-                #amit praveen kumar has moved to another project.  akshata is coming in 
-
-                subprocess.run(['vi', "/dev/shm/convo.input"])
-                # Attempt to read /dev/shm/convo.input into myinput
-                try:
-                    with open("/dev/shm/convo.input", "r") as f:
-                        myinput = f.read().rstrip("\n")  # Removes trailing newline characters
-                        # Clear screen
-                        print("\033[2J\033[1;1H")
-                        # Print messages
-                        printMessagesToScreen()  # Assuming this function prints messages to the screen
-                        print("IInput>>", end='', flush=True)
-                        print(myinput, end='', flush=True)
-                        dontProcessInputYet = True  # Assuming this flag is used elsewhere to control input processing
-                        paste = False  # Assuming this flag is used elsewhere to control 'paste' behavior
-                        if not myinput.strip():
-                            continue
-                except Exception as e:
-                    print(f"Failed to read file: {e}")
-                    myinput = ""
-                    continue
-
-            #is myinput == nopaste
-            if (myinput == ":nopaste"):
-                print("Paste mode disabled")
-                paste = False
-                myinput = ""
-                continue
-
-            #is myinput == paste
-            if (myinput == ":paste"):
-                print("Paste mode enabled")
-                paste = True
-                myinput = ""
-                continue
-
-            # :e 
-            if (len(myinput) > 3 and myinput[0] == ":" and myinput[1] == "e" and myinput[2] == " "):
-                try:
-                    # Parse the number after the :e command
-                    erasect = int(myinput[3:].strip())
-                except ValueError:
-                    print("Invalid erase parameter")
-                    continue
-
-                print("Removing last " + str(erasect) + " messages")
-                myinput = ""
-
-                # Delete last erasect messages
-                for i in range(erasect):
-                    if messages:
+                        # Remove the user message from messages array since we're rerunning
                         messages.pop()
 
-                print("New Last Message:")
-                # Get last message
-                if messages:
-                    lastMessageItem = messages[-1]  # Simplified way to get the last item
-                    # Check if user or system
-                    if lastMessageItem['role'] == "user":
-                        print(lastMessageItem['content'])
-                    elif lastMessageItem['role'] == "assistant":
-                        printGreen(lastMessageItem['content'], True)
+                    # Print messages to screen
+                    printMessagesToScreen(True, False, "bInput>>" + myinput)
+
+                    
+                    
+                if myinput.strip() == ":refresh":
+                    printMessagesToScreen(True, False)
+                    print()
+                    myinput = ""
+                    continue
+
+
+                #:redo (same as :add but doesn't append to last user message, overwrites it)
+                if False and (len(myinput) == 5 and myinput[:5] == ":redo") or (len(myinput) > 6 and myinput[:6] == ":redo "): #TODO can we simplify this if staetemtn
+                    #if the last message is an assistant message, remove it from messages
+                    
+                    #is the last message a user message?
+                    if not (len(messages) > 1 and messages[-2]['role'] == "user"):
+                        print("No user message to rerun")
+                        myinput = ""
+                        continue
+                    elif (len(messages) > 0 and messages[-1]['role'] == "assistant"):
+                        str_after_command = myinput[6:].strip()
+                        #is it empty?
+                        filetext = ""
+                        if (str_after_command == ""):
+                            #write the last user message to /dev/shm/lusertemp
+                            with open("/dev/shm/lusertemp", "w") as f:
+                                f.write(messages[-2]['content'])
+                            #open vi
+                            subprocess.run(['vi', "/dev/shm/lusertemp"])
+                            #read the file back into myinput
+                            with open("/dev/shm/lusertemp", "r") as f:
+                                filetext = f.read()
+
+                            #wait but is filetext the same as the original message?
+                            if (filetext.strip() == messages[-2]['content'].strip()):
+                                print("No changes made to user message\n")
+                                myinput = ""
+                                continue
+                            myinput = filetext
+
+                        if (len(messages) > 0 and messages[-1]['role'] == "assistant"):
+                            messages.pop()
+                            
+                        #now remove that user message from messages array since we're rerunning
+                        messages.pop()
+                    else:
+                        #TODO this really should handle the case for if the last message is a user message... it's unlikely
+                        #but there's realy no reason not to and it should really be refactored with the previous elif
+                        pass
+                    #now rewrite messages to screen
+                    printMessagesToScreen(True, False, "Input>>" + myinput)
+                    
+                    
+                if myinput.strip() == ":remresp": 
+                    #remove the JSON after "RESPONSE: " in the previous user message (which is actually tool output)
+                    #but if no such pattern/message exists then just output that there was nothing to remove
+                    #and if the message is in fact there, then remove it and output that it was removed, and in the 
+                    #message from which it was removed, output that it was removed in place of the content that was removed
+
+                    last_user_message_index = len(messages) - 1
+                    #now, starting from last_user_message_index, go backwards until you find a user message
+                    while last_user_message_index >= 0 and messages[last_user_message_index]['role'] != "user":
+                        last_user_message_index -= 1
+                    #if last_user_message_index is less than 0, then there are no user messages to remove the response from
+                    if last_user_message_index < 0:
+                        print("No user messages to remove responses from")
+                    else:
+                        #messages[last_user_message_index]['content'] = messages[last_user_message_index]['content'].split("RESPONSE: ")[0] + "RESPONSE: [removed by user for effiency]"
+                        #first see if RESPONSE: is in the message
+                        #remove everything after the last 'RESPONSE: ' and replace it with 'RESPONSE: [removed by user for effiency]'
+                        if "RESPONSE: " in messages[last_user_message_index]['content']:
+                            #get first 64 chars of string to remove
+                            first_64_chars = messages[last_user_message_index]['content'].split("RESPONSE: ")[0][:64]
+                            messages[last_user_message_index]['content'] = messages[last_user_message_index]['content'].split("RESPONSE: ")[0] + "RESPONSE: [removed by user for effiency]"
+                            print("Removed response from previous user message, which began with 'RESPONSE: '" + first_64_chars) 
+                        else:
+                            print("No response to remove from previous user message.")
+                    print()
+                    myinput = ""
+                    continue
+
+                #:rolelist
+                if myinput.strip() == (":rolelist"):
+                    printRoleInfo()
+                    print()
+
+                if myinput.strip() == ":nobash":
+                    #global args
+                    args.nobash = True
+                    printGrey("Diable {{}} processing")
+                    continue
+
+                if myinput.strip() == ":yesbash":
+                    #global args
+                    args.nobash = False
+                    printGrey("Enable {{}} processing")
+                    continue
+
+                #:roleedit
+                if myinput.strip() == ":roleedit":
+                    try:
+                        if not isinstance(loaded_role, Role):
+                            printYellow("No role currently loaded or the loaded role is not of the correct type.\n")
+                        else:
+                            thfile = loaded_role.rolefile
+                            if thfile:
+                                edit_role(thfile)
+                                # Optionally, reload the role after editing
+                                reloaded_role = load_role(loaded_role.name)
+                                if reloaded_role:
+                                    loaded_role = reloaded_role
+                                    printGreen(f"Role '{loaded_role.name}' has been reloaded after editing.\n")
+                                else:
+                                    printRed(f"Failed to reload role '{loaded_role.name}' after editing.\n")
+                            else:
+                                printYellow("The current role doesn't have an associated file, attempting DB\n")
+                                edit_role_in_db(loaded_role.name)
+                    except Exception as e:
+                        printRed(f"Error: {str(e)}\n")
+                    myinput = ""
+                    continue
+                                
+                #:role
+                if myinput.strip() == ":role":
+                    printRoleInfo()
+                    myinput = ""
+                    continue
+            
+                if myinput.strip().startswith(":role "):
+                    first_word_after = myinput.strip().split(" ")[1].strip()
+                    if len(first_word_after) > 0:
+                        load_role(first_word_after)
+                    myinput = ""
+                    continue
+            
+                if myinput.strip() == ":rolesave":
+                    save_role()
+                    myinput = ""
+                    continue
+                
+
+                if myinput.strip() == ":alltools":
+                    refreshTools(True)
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":savetools": 
+                    # Save active tools to the specified filename
+                    try:
+                        filename = myinput[11:].strip()  # Get filename after ":savetools "
+                        writeActiveCanonicalNamesToFile(fBASE_DIR/'tools/collections/{filename}')
+                        print(f"Tools saved to "+BASE_DIR/"tools/collections/{filename}\n")
+                    except Exception as e:
+                        print(f"Error saving tools: {e}")
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":loadtools":
+                    # Load tools from the specified filename
+                    try:
+                        filename = myinput[11:].strip()  # Get filename after ":loadtools "
+                        deactivateAllToolsInArgsToolsArray() #TODO refactor to use the other deactivateTools method
+                        tools = getCanonicalToolsNamesFromFile(fBASE_DIR/'tools/collections/{filename}')
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print(f"\nTools loaded from "+BASE_DIR/"tools/collections/{filename}\n")
+                    except Exception as e:
+                        print(f"Error loading tools: {e}")
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":notools":
+                    deactivateTools()
+                    printYellow("Deactivated tools\n")
+                    force_tools_flag = False
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":onlytools":
+                    print("Only tools\n")
+                    force_tools_flag = True
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":noonlytools":
+                    print("No only tools\n")
+                    force_tools_flag = False
+                    myinput = ""
+                    continue
+
+                if ":toolsjust " in myinput.strip() and myinput.startswith(":toolsjust"):
+                    #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
+                    tools = myinput.strip()[11:].split(" ")
+                    if len(tools) > 0 and ":toolsjust " in myinput.strip():
+                        print(myinput.strip())
+                        print()
+                        deactivateAllToolsInArgsToolsArray()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print()
+                        with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
+                            file.truncate(0)
+                    myinput = ""
+                    continue
+                
+                if ":tools" in myinput.strip() and myinput.startswith(":tools"):
+                    #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
+                    tools = myinput.strip()[7:].split(" ")
+                    if len(tools) > 0 and ":tools " in myinput.strip():
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print()
+                    else:
+                        # Load the tools from the deactivated tools file
+                        deactivated_tools = getDeactivatedCanonicalNamesFromFile()
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(deactivated_tools, True)
+                        printActiveTools()
+                        print()
+                        #writeActiveCanonicalNamesToFile()
+                        with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
+                            file.truncate(0)
+                    myinput = ""
+                    continue
+
+                #AI ultimately for a handoff to occur bewtween 2 roles, there needs to be an even greater/broader definition given to the 'state' of that role to include tools (including instantiated classes if any), conversation state, and I can't think of anything else but if you have ideas let me know
+
+                
+                #AI syscolon files i think may fall by the wayside (below this)
+                #deal with syscolon files
+                #if myinput.startswith(":"):
+                        
+                #:role
+                if myinput.strip() == ":role":
+                    printRoleInfo()
+                    myinput = ""
+                    continue
+            
+                if myinput.strip().startswith(":role "):
+                    first_word_after = myinput.strip().split(" ")[1].strip()
+                    if len(first_word_after) > 0:
+                        load_role(first_word_after)
+                    myinput = ""
+                    continue
+            
+                if myinput.strip() == ":rolesave":
+                    save_role()
+                    myinput = ""
+                    continue
+                
+
+                if myinput.strip() == ":alltools":
+                    refreshTools(True)
+                    myinput = ""
+                    continue
+
+                if ":savetools" in myinput and myinput.startswith(":savetools"):
+                    # Save active tools to the specified filename
+                    try:
+                        filename = myinput[11:].strip()  # Get filename after ":savetools "
+                        writeActiveCanonicalNamesToFile(fBASE_DIR/'tools/collections/{filename}')
+                        print(f"Tools saved to "+BASE_DIR/"tools/collections/{filename}\n")
+                    except Exception as e:
+                        print(f"Error saving tools: {e}")
+                    myinput = ""
+                    continue
+
+                if ":loadtools" in myinput and myinput.startswith(":loadtools"):
+                    # Load tools from the specified filename
+                    try:
+                        filename = myinput[11:].strip()  # Get filename after ":loadtools "
+                        deactivateAllToolsInArgsToolsArray() #TODO refactor to use the other deactivateTools method
+                        tools = getCanonicalToolsNamesFromFile(BASE_DIR/'tools/collections/{filename}')
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print(f"\nTools loaded from "+BASE_DIR/"tools/collections/{filename}\n")
+                    except Exception as e:
+                        print(f"Error loading tools: {e}")
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":notools":
+                    deactivateTools()
+                    printYellow("Deactivated tools\n")
+                    force_tools_flag = False
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":onlytools":
+                    print("Only tools\n")
+                    force_tools_flag = True
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":noonlytools":
+                    print("No only tools\n")
+                    force_tools_flag = False
+                    myinput = ""
+                    continue
+
+                if ":toolsjust" in myinput.strip() and myinput.startswith(":toolsjust"):
+                    #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
+                    tools = myinput.strip()[11:].split(" ")
+                    if len(tools) > 0 and ":toolsjust " in myinput.strip():
+                        print(myinput.strip())
+                        print()
+                        deactivateAllToolsInArgsToolsArray()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print()
+                        with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
+                            file.truncate(0)
+                    myinput = ""
+                    continue
+                
+                if ":tools" in myinput.strip() and myinput.startswith(":tools"):
+                    #get an array of the items passed after :tools which will be numbers only and it should throw an error if any number is greater than the length of the tools array
+                    tools = myinput.strip()[7:].split(" ")
+                    if len(tools) > 0 and ":tools " in myinput.strip():
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(tools)
+                        print()
+                    else:
+                        # Load the tools from the deactivated tools file
+                        deactivated_tools = getDeactivatedCanonicalNamesFromFile()
+                        print()
+                        activateOrDeactivateToolsInToolsArrayBasedOnIndexOrName(deactivated_tools, True)
+                        printActiveTools()
+                        print()
+                        #writeActiveCanonicalNamesToFile()
+                        with open(BASE_DIR/'tools/deactivated_tools.txt', 'r+') as file:
+                            file.truncate(0)
+                    myinput = ""
+                    continue
+
+                
+                #AI syscolon files i think may fall by the wayside (below this)
+                #deal with syscolon files
+                if myinput.startswith(":"):
+                    # Split the input into command and the rest of the message
+                    command_and_message = myinput[1:].strip().split(" ", 1)
+                    command = command_and_message[0]  # This will be 'thing' in the example
+                    message = command_and_message[1] if len(command_and_message) > 1 else ""  # The rest of the message
+
+                    # Check if command (fne) exists in content_dict
+                    if command in syscontent_dict:
+                        content = f"{syscontent_dict[command]} {message}"
+                        if not messages:
+                            # If messages is empty, add a new system message
+                            messages.append({'role': 'system', 'content': content})
+                        elif messages[0]['role'] == 'system':
+                            # If the first message is system, append to it
+                            messages[0]['content'] = f"{messages[0]['content']}\n{content}"
+                        else:
+                            # If the first message is not system, insert a new system message
+                            messages.insert(0, {'role': 'system', 'content': content})
+                        print("Added " + command + " content to system message\n")
+
+                        myinput = ""
+                        continue
+                    else:
+                        pass
+
+                #deal with colon files
+                if myinput.startswith(":"):
+                    # Split the input into command and the rest of the message
+                    command_and_message = myinput[1:].strip().split(" ", 1)
+                    command = command_and_message[0]  # This will be 'thing' in the example
+                    message = command_and_message[1] if len(command_and_message) > 1 else ""  # The rest of the message
+
+                    # Check if command (fne) exists in content_dict
+                    if command in syscontent_dict:
+                        # Prepend the content from the corresponding file to the message
+                        myinput = f"{syscontent_dict[command]} {message}" #TODO i tihnk this is supposed to be system message...
+                    elif command in content_dict:
+                        # Prepend the content from the corresponding file to the message
+                        myinput = f"{content_dict[command]} {message}"
+                        pass
+
+                if ":toolslist" == myinput.strip():
+                    refreshTools()
+                    console = Console()
+                    table = Table(show_header=False, box=None, padding=(0, 1), expand=True)
+                    table.add_column("Canonical Name", style="bold", ratio=1.5)
+                    table.add_column("Description", ratio=2)
+                    table.add_column("Parameters", ratio=1.5)
+                    for tool in args.tools_array: #AI this is a great example below of how to approach tools_array, which holds the tools passed to the LLM
+                        name_color = "yellow" if tool["active"] else "grey"
+                        desc_color = "bright_white" if args.tools_array.index(tool) % 2 == 0 else "white"
+                        params = ", ".join(tool['function']['parameters']['properties'].keys())
+                        table.add_row(
+                            Text(tool['canonical_name'], style=name_color),
+                            Text(tool['function']['description'], style=desc_color, overflow="ellipsis"),
+                            Text(params, style=desc_color, overflow="ellipsis")
+                        )
+                    console.print(table)
+                    myinput = ""
+                    continue
+
+                                
+                showtools = False
+                showinactivetools = False
+                if (myinput.strip() == ":toolsall") or (myinput.strip() == ":tools"):
+                    print("HIHIHIHI")
+                    showtools = True
+                    if myinput.strip() == ":toolsall":
+                        refreshTools(args.tools)
+                        showinactivetools = True
+                if showtools:
+                    console = Console()
+                    table = Table(title="Available Tools", show_header=True, header_style="bold green")
+
+                    #do that aghain but make it all % of like terminal width pelase
+                    try:
+                        terminal_width = shutil.get_terminal_size().columns
+                        name_width = int(terminal_width * 0.3)
+                        desc_width = int(terminal_width * 0.5)
+                        param_width = int(terminal_width * 0.2)
+                    except:
+                        name_width = 32
+                        desc_width = 80
+                        param_width = 50
+
+                    table.add_column("Name", style="white", width=name_width)
+                    table.add_column("Description", width=desc_width)
+                    table.add_column("Parameters", width=param_width)
+
+                    index = 0
+
+                    for index, tool in enumerate(args.tools_array):
+                        function = tool['function']
+                        name = function['name']
+                        canonical_name = tool['canonical_name']
+                        description = function['description']
+                        params = function['parameters']['properties']
+                        param_details = ", ".join([f"{k}: {v['description']}" for k, v in params.items()])
+
+                        # Alternate brightness for description and parameters
+                        description_style = "grey" if index % 2 == 0 else "white"
+                        param_style = "grey" if index % 2 == 0 else "white"
+
+                    
+
+                        #add a row but this time with the active status as per the args.tools_array[index]["active"]
+                        if showinactivetools: #do the flow where we DO show an index b/c that's the index we'd want them to do activate/deactivate on
+                            if args.tools_array[index]["active"]:
+                                table.add_row(
+                                    f"{str(index)}. [green]{canonical_name}[/green]",
+                                    f"[{description_style}]{description}[/{description_style}]",
+                                    f"[{param_style}]{param_details}[/{param_style}]"
+                                )
+                            else:
+                                table.add_row(
+                                    f"{str(index)}. [red]{canonical_name}[/red]",
+                                    f"[{description_style}]{description}[/{description_style}]",
+                                    f"[{param_style}]{param_details}[/{param_style}]"
+                                )
+                        else:
+                            if args.tools_array[index]["active"]:
+                                table.add_row(
+                                    f"[yellow]{canonical_name}[/yellow]",
+                                    f"[{description_style}]{description}[/{description_style}]",
+                                    f"[{param_style}]{param_details}[/{param_style}]"
+                                )
+
+                        index += 1
+                    console.print(table)
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":noimages":
+                    modified = False
+                    new_messages = []
+                    
+                    for message in messages:
+                        new_message = message.copy()
+                        
+                        if message.get('content') and isinstance(message['content'], list):
+                            new_content = []
+                            for content_item in message['content']:
+                                if isinstance(content_item, dict) and content_item.get('type') == 'image_url':
+                                    new_content.append({'type': 'text', 'text': '[Image removed from conversation history to save context]'})
+                                    modified = True
+                                else:
+                                    new_content.append(content_item)
+                            new_message['content'] = new_content
+                        
+                        new_messages.append(new_message)
+                    
+                    messages[:] = new_messages
+                    
+                    if modified:
+                        print("Removed image data from conversation history\n") 
+                    else:
+                        print("No image data found in conversation history\n")
+                    myinput = ""
+                    continue
+
+
+
+                # :url [URL]
+                if (len(myinput) > 5 and myinput[:5] == ":url "):
+                    url = myinput[5:].strip()
+                    urltext = url_to_text(url)  # Assuming this function fetches and returns the text from the URL
+                    # Now save that urltext to a file in /dev/shm
+                    with open("/dev/shm/url.txt", "w") as f:
+                        f.write(urltext)
+
+                    # If the file exists, remove it
+                    if os.path.exists("/dev/shm/convo.input"):
+                        os.remove("/dev/shm/convo.input")
+
+                    # Is the last message in messages a user message
+                    if (messages and messages[-1]['role'] == "user"):
+                        # Write content of last message (from user) to /dev/shm/convo.input
+                        with open("/dev/shm/convo.input", "w") as f:
+                            f.write(messages[-1]['content'])
+                        messages.pop()
+                    elif urltext is not None:
+                        # Remove excessive blank lines from urltext
+                        urltext = re.sub(r'\n\s*\n', '\n\n', urltext)
+                        with open("/dev/shm/convo.input", "w") as f:
+                            f.write(urltext)
+                    else:
+                        print("Could not retrieve URL")
+                        continue
+
+                    #amit praveen kumar has moved to another project.  akshata is coming in 
+
+                    subprocess.run(['vi', "/dev/shm/convo.input"])
+                    # Attempt to read /dev/shm/convo.input into myinput
+                    try:
+                        with open("/dev/shm/convo.input", "r") as f:
+                            myinput = f.read().rstrip("\n")  # Removes trailing newline characters
+                            # Clear screen
+                            print("\033[2J\033[1;1H")
+                            # Print messages
+                            printMessagesToScreen()  # Assuming this function prints messages to the screen
+                            print("IInput>>", end='', flush=True)
+                            print(myinput, end='', flush=True)
+                            dontProcessInputYet = True  # Assuming this flag is used elsewhere to control input processing
+                            paste = False  # Assuming this flag is used elsewhere to control 'paste' behavior
+                            if not myinput.strip():
+                                continue
+                    except Exception as e:
+                        print(f"Failed to read file: {e}")
+                        myinput = ""
+                        continue
+
+                #is myinput == nopaste
+                if (myinput == ":nopaste"):
+                    print("Paste mode disabled")
+                    paste = False
+                    myinput = ""
+                    continue
+
+                #is myinput == paste
+                if (myinput == ":paste"):
+                    print("Paste mode enabled")
+                    paste = True
+                    myinput = ""
+                    continue
+
+                # :e 
+                if (len(myinput) > 3 and myinput[0] == ":" and myinput[1] == "e" and myinput[2] == " "):
+                    try:
+                        # Parse the number after the :e command
+                        erasect = int(myinput[3:].strip())
+                    except ValueError:
+                        print("Invalid erase parameter")
+                        continue
+
+                    print("Removing last " + str(erasect) + " messages")
+                    myinput = ""
+
+                    # Delete last erasect messages
+                    for i in range(erasect):
+                        if messages:
+                            messages.pop()
+
+                    print("New Last Message:")
+                    # Get last message
+                    if messages:
+                        lastMessageItem = messages[-1]  # Simplified way to get the last item
+                        # Check if user or system
+                        if lastMessageItem['role'] == "user":
+                            print(lastMessageItem['content'])
+                        elif lastMessageItem['role'] == "assistant":
+                            printGreen(lastMessageItem['content'], True)
+                    continue
+
+
+                if (":multi" == myinput.strip()):
+                    print("Enter Multiple Lines, then CTRL+D when done")
+                    contents = []
+                    while True:
+                        try:
+                            line = input()
+                        except EOFError:
+                            break
+                        contents.append(line)
+                    mystr = '\n'.join([line.strip() for line in contents])
+                    myinput = mystr
+                #print(mystr)
+
+                #does myinput contain "genimage" 
+                if (myinput.strip() == "genimage"):
+                    #first, get the conversation
+                    convo = ""
+                    for message in messages:
+                        if (message['role'] == "user"):
+                            convo += "User: " + message['content'] + "\n"
+                        if (message['role'] == "assistant"):
+                            convo += "AI: " + message['content'] + "\n"
+                    #now make convo only the last 4000 characters of the convo
+                    convo = convo[-4000:] 
+                    resp = sendDalle3APIRequest(convo, printToScreen=False)
+                    resp = "Copied the image to Windows clipboard: " + resp
+                    #now add resp as a message from the AI
+                    pres = ""
+                    if (args.identity):
+                        pres = args.identity + ": "
+                    messages.append({
+                        "role": "assistant",
+                        "content": pres + resp
+                    })
+                    printGreen(resp)
+                    myinput = ""
+                    dontProcessInputYet = True
+                    generatedImage = True
+
+                #does myinput contain "image=[anything]"
+                doImage = False
+                restOfMessage=""
+                encoded_strings = []
+                #make sure image= is at least the first 6 characters of myinput
+                while (len(myinput) > 6 and myinput[0:6] == "image="):
+                    imageFilename = myinput.split("image=")[1].strip().split(" ")[0].strip()
+                    #make restOfMessage be everything except for the FIRST instance of "image=" + imageFilename, as if you took ONLY the first instance of "image=" + imageFilename and replaced it with nothing 
+                    restOfMessage = re.sub("image=" + imageFilename, "", myinput, 1).strip()
+                    
+                    #get base64
+                    try:
+                        with open(imageFilename, "rb") as image_file:
+                            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                            encoded_strings.append(encoded_string)
+                            image_file.close()
+                            doImage = True
+                        myinput = restOfMessage
+                    except Exception as e:
+                        print("xError: " + str(e))
+                        pass
+
+                # New code snippet that processes "images="
+                if myinput.startswith("images="):
+                    try:
+                        # Extract the number of images to process
+                        number_of_images = int(myinput.split("images=")[1].split()[0])
+                        # Get a list of all .jpg files in the /dev/shm directory sorted by modification time (newest first)
+                        jpg_files = sorted(glob.glob("/dev/shm/*.jpg"), key=os.path.getmtime, reverse=True)
+                        # Take the most recent 'number_of_images' files
+                        recent_jpg_files = jpg_files[:number_of_images]
+
+                        if len(recent_jpg_files) < number_of_images:
+                            print()
+
+                        for filename in recent_jpg_files:
+                            # Encode each image to base64 and add it to the list
+                            with open(filename, "rb") as image_file:
+                                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                                encoded_strings.append(encoded_string)
+                                doImage = True
+
+                        # Update restOfMessage to remove the "images=" part
+                        restOfMessage = re.sub("images=\d+", "", myinput, 1).strip()
+
+                    except ValueError:
+                        print("Error: The number of images should be an integer.")
+                    except Exception as e:
+                        print("yError: " + str(e))
+
+
+                # :r [response model] [return model]
+                if (len(myinput.strip()) >= 2 and (myinput[0] == ":" and myinput[1] == "r")): 
+                    parts = myinput.split()
+                    response_model = parts[1] if len(parts) > 1 else None
+                    return_model = parts[2] if len(parts) > 2 else None
+
+                    # Save the current model
+                    original_model = args.model
+
+                    # Invert the conversation roles
+                    messages = invertMessages(messages)
+
+                    if response_model:
+                        # Switch to the response model
+                        args.model = response_model
+                        init_assistantt() 
+                    if return_model:
+                        # later Switch to the return model
+                        args.model = return_model
+                    else:
+                        # later Revert to the original model if no return model specified
+                        args.model = original_model
+                    myinput = ""
+                    continue
+
+                #AI end : command processing
+
+
+                if not dontProcessInputYet and not doImage:
+                    #AI BIG DEAL why is messages sometimes NONE here?
+                    if (len(messages) == 0 or messages[-1]['role'] != "user" or myinput.strip() != messages[-1]['content'].strip()):
+                        myinput = replace_bash_commands(myinput) #TODO this is a trial.... not sure if we'll keep it but i bet we do boy howdy
+                        messages.append({
+                            "role": "user",
+                            "content": myinput.strip()
+                        })
+                        myinput = ""
+                
+                #now do one that processes multiple miamges from encoded_stirngs
+                if not dontProcessInputYet and doImage:
+                    if (len(messages) == 0 or messages[-1]['role'] != "user" or restOfMessage.strip() != messages[-1]['content'].strip()):
+                        new_message = {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": restOfMessage.strip()
+                                }
+                            ]
+                        }
+                        for encoded_string in encoded_strings:
+                            new_message['content'].append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{encoded_string}"
+                                }
+                            })
+                    messages.append(new_message)
+                    myinput = ""
+
+            if dontProcessInputYet:
                 continue
 
-
-            if (":multi" == myinput.strip()):
-                print("Enter Multiple Lines, then CTRL+D when done")
-                contents = []
-                while True:
+            #is the last message a user message?
+            if (len(messages) > 0 and messages[len(messages)-1]['role'] == "user"):
+                ok = False
+                retryCount = 0
+                while (not ok and retryCount < 8): #AI here is the loop that calls sendRequest() (loop in case of failure)
                     try:
-                        line = input()
-                    except EOFError:
-                        break
-                    contents.append(line)
-                mystr = '\n'.join([line.strip() for line in contents])
-                myinput = mystr
-            #print(mystr)
+                        #is args.codeoutputfile set?
+                        if args.outputcodefile is not None:
+                            completion, ignore = sendRequest(True) #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
+                            #hunt
+                            try:
+                                if isinstance(completion, list):
+                                    completion = completion[0]
+                            except:
+                                pass
+                            #now write completion to a file specified by args.codeoutputfile
+                            backupFile(args.outputcodefile)
+                            with open(args.outputcodefile, 'w') as f:
+                                f.write(str(completion) + "\n")
+                            #now change file to +x if it ends in .sh
+                            if args.outputcodefile.endswith(".sh"):
+                                os.system("chmod +x " + args.outputcodefile)
+                            os._exit(0)
+                        else:
+                            try:
+                                completion = sendRequest() #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
+                            #now handle keyboard interrupt
+                            except KeyboardInterrupt:
+                                #so actually we need to interrupt the sendRequest(), but all this does is keep the program from exiting when trying to cancel a request that is pending to the LLM 
+                                continue
+                            except Exception as e:
+                                if isinstance(completion, list):
+                                    completion = completion[0]
+                            except:
+                                pass
+                        if args.oneshot:
+                            pres = ""
+                            if (args.identity):
+                                pres = args.identity + ": "
+                            messages.append({
+                                "role": "assistant",
+                                "content": pres + completion
+                            })
+                            if args.jo is not None:
+                                if (args.jou is not None):
+                                    messages = invertMessages(messages)
+                                outputConversationToFile(args.jo)
+                            os._exit(0)
+                        print()
+                        #gotAnyRequestResult = True
+                        ok = True
+                        if currFileName != None and currFileName != "" and not args.oneshot:
+                            outputConversationToFile(currFileName)
+                        elif not args.oneshot:
+                            currFileName = outputConversationToFile()
+                    except LLMRepetitiveResponseError:
+                        print("The LLM provided a repetitive response. Attempting to break the loop...")
+                        messages.append({
+                            "role": "user",
+                            "content": "You seem to be repeating yourself. Please provide a different response or explain why you're repeating."
+                        })
+                    except LLMEndConversationError as e:
 
-            #does myinput contain "genimage" 
-            if (myinput.strip() == "genimage"):
-                #first, get the conversation
-                convo = ""
-                for message in messages:
-                    if (message['role'] == "user"):
-                        convo += "User: " + message['content'] + "\n"
-                    if (message['role'] == "assistant"):
-                        convo += "AI: " + message['content'] + "\n"
-                #now make convo only the last 4000 characters of the convo
-                convo = convo[-4000:] 
-                resp = sendDalle3APIRequest(convo, printToScreen=False)
-                resp = "Copied the image to Windows clipboard: " + resp
-                #now add resp as a message from the AI
+                        if currFileName != None and currFileName != "" and not args.oneshot:
+                            outputConversationToFile(currFileName)
+                        elif not args.oneshot:
+                            currFileName = outputConversationToFile()
+                        #empty all messages, except the setup message
+                        messages = [messages[0]]
+                        pass
+                    except Exception as e:
+                        print("mmmError: " + str(e))
+                        stack = traceback.format_exc()
+                        print(stack)
+                        #we need here to reestablish the connection
+                        traceback.print_exc()
+
+                        #AI commenting the below ~10 lines may fix the 'stack trace in the messages array' bug
+                        #check if latest message is a user message and if so, append stack trace to it or if not, append it to a new user message
+                        #if (len(messages) > 0 and messages[-1]['role'] == "user"):
+                        #    messages[-1]['content'] += "\n\nStack Trace:\n" + stack
+                        #else:
+                        #    messages.append({
+                        #        "role": "user",
+                        #        "content": stack
+                        #    })
+
+                        global assistantt
+                        #global config
+                        init_assistantt()
+                        print("Retrying...\n")
+                    retryCount += 1
+
+                if (not ok):
+                    print("Too many errors, exiting...")
+                    if not (args.oneshot or args.outputcodefile is not None):
+                        outfile = outputConversationToFile()
+                        print("Conversation saved to: " + outfile)
+                    os._exit(1)
+
                 pres = ""
                 if (args.identity):
                     pres = args.identity + ": "
                 messages.append({
                     "role": "assistant",
-                    "content": pres + resp
+                    "content": pres + completion
                 })
-                printGreen(resp)
-                myinput = ""
-                dontProcessInputYet = True
-                generatedImage = True
 
-            #does myinput contain "image=[anything]"
-            doImage = False
-            restOfMessage=""
-            encoded_strings = []
-            #make sure image= is at least the first 6 characters of myinput
-            while (len(myinput) > 6 and myinput[0:6] == "image="):
-                imageFilename = myinput.split("image=")[1].strip().split(" ")[0].strip()
-                #make restOfMessage be everything except for the FIRST instance of "image=" + imageFilename, as if you took ONLY the first instance of "image=" + imageFilename and replaced it with nothing 
-                restOfMessage = re.sub("image=" + imageFilename, "", myinput, 1).strip()
-                
-                #get base64
-                try:
-                    with open(imageFilename, "rb") as image_file:
-                        encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                        encoded_strings.append(encoded_string)
-                        image_file.close()
-                        doImage = True
-                    myinput = restOfMessage
-                except Exception as e:
-                    print("xError: " + str(e))
-                    pass
+                messages_cursor = 0 #this means the end, our cursors start at the end and go negative to go inward
 
-            # New code snippet that processes "images="
-            if myinput.startswith("images="):
-                try:
-                    # Extract the number of images to process
-                    number_of_images = int(myinput.split("images=")[1].split()[0])
-                    # Get a list of all .jpg files in the /dev/shm directory sorted by modification time (newest first)
-                    jpg_files = sorted(glob.glob("/dev/shm/*.jpg"), key=os.path.getmtime, reverse=True)
-                    # Take the most recent 'number_of_images' files
-                    recent_jpg_files = jpg_files[:number_of_images]
+            response = ""
 
-                    if len(recent_jpg_files) < number_of_images:
-                        print()
+            #check if oneshot was set
+            if (args.oneshot):
+                sys.stdout.flush()
+                if args.jo is not None:
+                    outputConversationToFile(args.jo)
+                os._exit(0)
 
-                    for filename in recent_jpg_files:
-                        # Encode each image to base64 and add it to the list
-                        with open(filename, "rb") as image_file:
-                            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
-                            encoded_strings.append(encoded_string)
-                            doImage = True
+        #AI note, when creating roles, the yaml, the strings, they need to be in a '' encapsulated in quotes so need to add that somewhere as a directive
 
-                    # Update restOfMessage to remove the "images=" part
-                    restOfMessage = re.sub("images=\d+", "", myinput, 1).strip()
-
-                except ValueError:
-                    print("Error: The number of images should be an integer.")
-                except Exception as e:
-                    print("yError: " + str(e))
-
-
-            # :r [response model] [return model]
-            if (len(myinput.strip()) >= 2 and (myinput[0] == ":" and myinput[1] == "r")): 
-                parts = myinput.split()
-                response_model = parts[1] if len(parts) > 1 else None
-                return_model = parts[2] if len(parts) > 2 else None
-
-                # Save the current model
-                original_model = args.model
-
-                # Invert the conversation roles
-                messages = invertMessages(messages)
-
-                if response_model:
-                    # Switch to the response model
-                    args.model = response_model
-                    init_assistantt() 
-                if return_model:
-                    # later Switch to the return model
-                    args.model = return_model
-                else:
-                    # later Revert to the original model if no return model specified
-                    args.model = original_model
-                myinput = ""
-                continue
-
-            #AI end : command processing
-
-
-            if not dontProcessInputYet and not doImage:
-                #AI BIG DEAL why is messages sometimes NONE here?
-                if (len(messages) == 0 or messages[-1]['role'] != "user" or myinput.strip() != messages[-1]['content'].strip()):
-                    myinput = replace_bash_commands(myinput) #TODO this is a trial.... not sure if we'll keep it but i bet we do boy howdy
-                    messages.append({
-                        "role": "user",
-                        "content": myinput.strip()
-                    })
-                    myinput = ""
-            
-            #now do one that processes multiple miamges from encoded_stirngs
-            if not dontProcessInputYet and doImage:
-                if (len(messages) == 0 or messages[-1]['role'] != "user" or restOfMessage.strip() != messages[-1]['content'].strip()):
-                    new_message = {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": restOfMessage.strip()
-                            }
-                        ]
-                    }
-                    for encoded_string in encoded_strings:
-                        new_message['content'].append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{encoded_string}"
-                            }
-                        })
-                messages.append(new_message)
-                myinput = ""
-
-        if dontProcessInputYet:
-            continue
-
-        #is the last message a user message?
-        if (len(messages) > 0 and messages[len(messages)-1]['role'] == "user"):
-            ok = False
-            retryCount = 0
-            while (not ok and retryCount < 8): #AI here is the loop that calls sendRequest() (loop in case of failure)
-                try:
-                    #is args.codeoutputfile set?
-                    if args.outputcodefile is not None:
-                        completion, ignore = sendRequest(True) #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
-                        #hunt
-                        try:
-                            if isinstance(completion, list):
-                                completion = completion[0]
-                        except:
-                            pass
-                        #now write completion to a file specified by args.codeoutputfile
-                        backupFile(args.outputcodefile)
-                        with open(args.outputcodefile, 'w') as f:
-                            f.write(str(completion) + "\n")
-                        #now change file to +x if it ends in .sh
-                        if args.outputcodefile.endswith(".sh"):
-                            os.system("chmod +x " + args.outputcodefile)
-                        os._exit(0)
-                    else:
-                        try:
-                            completion = sendRequest() #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
-                        #now handle keyboard interrupt
-                        except KeyboardInterrupt:
-                            #so actually we need to interrupt the sendRequest(), but all this does is keep the program from exiting when trying to cancel a request that is pending to the LLM 
-                            continue
-                        except Exception as e:
-                            if isinstance(completion, list):
-                                completion = completion[0]
-                        except:
-                            pass
-                    if args.oneshot:
-                        pres = ""
-                        if (args.identity):
-                            pres = args.identity + ": "
-                        messages.append({
-                            "role": "assistant",
-                            "content": pres + completion
-                        })
-                        if args.jo is not None:
-                            if (args.jou is not None):
-                                messages = invertMessages(messages)
-                            outputConversationToFile(args.jo)
-                        os._exit(0)
-                    print()
-                    #gotAnyRequestResult = True
-                    ok = True
-                    if currFileName != None and currFileName != "" and not args.oneshot:
-                        outputConversationToFile(currFileName)
-                    elif not args.oneshot:
-                        currFileName = outputConversationToFile()
-                except LLMRepetitiveResponseError:
-                    print("The LLM provided a repetitive response. Attempting to break the loop...")
-                    messages.append({
-                        "role": "user",
-                        "content": "You seem to be repeating yourself. Please provide a different response or explain why you're repeating."
-                    })
-                except LLMEndConversationError as e:
-
-                    if currFileName != None and currFileName != "" and not args.oneshot:
-                        outputConversationToFile(currFileName)
-                    elif not args.oneshot:
-                        currFileName = outputConversationToFile()
-                    #empty all messages, except the setup message
-                    messages = [messages[0]]
-                    pass
-                except Exception as e:
-                    print("mmmError: " + str(e))
-                    stack = traceback.format_exc()
-                    print(stack)
-                    #we need here to reestablish the connection
-                    traceback.print_exc()
-
-                    #AI commenting the below ~10 lines may fix the 'stack trace in the messages array' bug
-                    #check if latest message is a user message and if so, append stack trace to it or if not, append it to a new user message
-                    #if (len(messages) > 0 and messages[-1]['role'] == "user"):
-                    #    messages[-1]['content'] += "\n\nStack Trace:\n" + stack
-                    #else:
-                    #    messages.append({
-                    #        "role": "user",
-                    #        "content": stack
-                    #    })
-
-                    global assistantt
-                    #global config
-                    init_assistantt()
-                    print("Retrying...\n")
-                retryCount += 1
-
-            if (not ok):
-                print("Too many errors, exiting...")
-                if not (args.oneshot or args.outputcodefile is not None):
-                    outfile = outputConversationToFile()
-                    print("Conversation saved to: " + outfile)
-                os._exit(1)
-
-            pres = ""
-            if (args.identity):
-                pres = args.identity + ": "
-            messages.append({
-                "role": "assistant",
-                "content": pres + completion
-            })
-
-            messages_cursor = 0 #this means the end, our cursors start at the end and go negative to go inward
-
-        response = ""
-
-        #check if oneshot was set
-        if (args.oneshot):
-            sys.stdout.flush()
-            if args.jo is not None:
-                outputConversationToFile(args.jo)
-            os._exit(0)
-
-    #AI note, when creating roles, the yaml, the strings, they need to be in a '' encapsulated in quotes so need to add that somewhere as a directive
-
-    #AI bug i tihnk when too many tools are loaded we are still getting some sort of cnoflict or inability to find tools
-    #AI FEAT add :inject so one can silently inject a user message above the latest message from the AI.  In this way anything importnat can be added to the conversation without requiring a response from the LLM
-    #AI feat add :redraw command for those times you need the conversation to be reshown but like, you're at the 1st repsonse and can't just up/down arrow to refresh
-    #AI BUG -l no longer seems to be working, instead just ignoring that to some extent
+        #AI bug i tihnk when too many tools are loaded we are still getting some sort of cnoflict or inability to find tools
+        #AI FEAT add :inject so one can silently inject a user message above the latest message from the AI.  In this way anything importnat can be added to the conversation without requiring a response from the LLM
+        #AI feat add :redraw command for those times you need the conversation to be reshown but like, you're at the 1st repsonse and can't just up/down arrow to refresh
+        #AI BUG -l no longer seems to be working, instead just ignoring that to some extent
 
 
 
-    #AI there needs to be a better system of printing to the screen. there are 2 key issues. One, output live is always better than re-output. The colors are right, you don't see those 'filler' assistant messages where they just have a '.' when they were making a tool call, the tool call which goes into the response 'user' message that's actually from the tool execution.  Anyway, that's one thing. There's another thing that is very painful that needs to be addressed, and that is the use of Console from the rich library in order to do markup printing, which to be fair is good stuff, you know? but here's the issue. When it's streaming new content back from the LLM, and updating the console, a coupl ethings about that really sucks.  One, there is a lot of flicker and it was cool for a while but now it's just annooying (flicker happens when the mssage is updating) and 2nd issue with it is that once it gets to the bottom of the terminal it just does this '...' thing at the bottom and then i can no longer see what it's writing because it's just writing under the '...' and i can't scroll down and it's STILL flickering and so it's just... you know?
-    #AI another major thorn in my side is that getch() operates too slowly, for example, I can't paste text (and therefore, can't use a speech-to-text transcription engine) to talk to the LLM.  (I can paste using {{p}} or whatever but that is differetn, sometimes you need to paste multiple things to a single message, you know? there is after all only one clipboard. vi is a good option the program offers but simple ability to paste would be amazing. I dont want to have to hit ESC to go to 'doesn't mess up when you paste text here' mode because that really should be easy in 2024 even on WSL2.
+        #AI there needs to be a better system of printing to the screen. there are 2 key issues. One, output live is always better than re-output. The colors are right, you don't see those 'filler' assistant messages where they just have a '.' when they were making a tool call, the tool call which goes into the response 'user' message that's actually from the tool execution.  Anyway, that's one thing. There's another thing that is very painful that needs to be addressed, and that is the use of Console from the rich library in order to do markup printing, which to be fair is good stuff, you know? but here's the issue. When it's streaming new content back from the LLM, and updating the console, a coupl ethings about that really sucks.  One, there is a lot of flicker and it was cool for a while but now it's just annooying (flicker happens when the mssage is updating) and 2nd issue with it is that once it gets to the bottom of the terminal it just does this '...' thing at the bottom and then i can no longer see what it's writing because it's just writing under the '...' and i can't scroll down and it's STILL flickering and so it's just... you know?
+        #AI another major thorn in my side is that getch() operates too slowly, for example, I can't paste text (and therefore, can't use a speech-to-text transcription engine) to talk to the LLM.  (I can paste using {{p}} or whatever but that is differetn, sometimes you need to paste multiple things to a single message, you know? there is after all only one clipboard. vi is a good option the program offers but simple ability to paste would be amazing. I dont want to have to hit ESC to go to 'doesn't mess up when you paste text here' mode because that really should be easy in 2024 even on WSL2.
 
-    #AI singleton state machine instead of all these global vars?
+        #AI singleton state machine instead of all these global vars?
 
-    #AI refactor this ai.py file that we are in right here, it should itself be a class that can be imported by another script
+        #AI refactor this ai.py file that we are in right here, it should itself be a class that can be imported by another script
 
-    #AI FEATURE BIG BIG BIG There's been all this talk about how to handle the buttons in the UI for that thing. but what if instead of doing that, we like, allow the services that consume the transcription data to self-advertise and the buttons in the UI are a direct result of that. So for example if my computer has a nice little monster that lives in the taskbar that consumes from the service, it would advertise some name and then that button/entity would reveal itself in the android UI. so that is an idea..   This could play into multiple chatbots with conversational context and everything
+        #AI FEATURE BIG BIG BIG There's been all this talk about how to handle the buttons in the UI for that thing. but what if instead of doing that, we like, allow the services that consume the transcription data to self-advertise and the buttons in the UI are a direct result of that. So for example if my computer has a nice little monster that lives in the taskbar that consumes from the service, it would advertise some name and then that button/entity would reveal itself in the android UI. so that is an idea..   This could play into multiple chatbots with conversational context and everything
 
-    
+        except KeyboardInterrupt:
+            print("Keyboard interrupt received. Exiting...")
+            break
+
+        
 if __name__ == "__main__":
     main()
