@@ -2976,70 +2976,38 @@ def cleanDotMessages(themessages):
             break                                                                                                                              
                                                                                                                                                 
     try:                                                                                            
-        #is cleanedMessages[lastAssistantIndex]['content'] a dict?
+        # If no assistant message found, return original messages
+        if lastAssistantIndex == -1:
+            return cleanedMessages
+
+        # Handle case where content is a dict
         if isinstance(cleanedMessages[lastAssistantIndex]['content'], dict):
             #convert that value in the dict to a string, it's json, just convert to a string. This was needed when parsing string that happens to be a JSON object in the LLM response itself like {"respond": "some json"}
             cleanedMessages[lastAssistantIndex]['content'] = json.dumps(cleanedMessages[lastAssistantIndex]['content'])
 
-        # If no assistant message or last assistant message isn't a dot, return the original messages                                               
-        if lastAssistantIndex == -1 or cleanedMessages[lastAssistantIndex]['content'].strip() != ".":                                               
-            return themessages                                                                                                                      
-    except:
-        for key, value in cleanedMessages[lastAssistantIndex]['content']:
-            print(f"{key}:{value}")
-                                                                                                                                                    
-    # Count preceding assistant dot messages, skipping user messages                                                                            
-    dotCount = 1  # Start with the last dot message already found                                                                               
-    dotIndices = [lastAssistantIndex]                                                                                                           
-    for i in range(lastAssistantIndex - 1, -1, -1):                                                                                             
-        if cleanedMessages[i]['role'] == "assistant" and cleanedMessages[i]['content'].strip() == ".":                                          
-            dotCount += 1                                                                                                                       
-            dotIndices.append(i)                                                                                                                
-        elif cleanedMessages[i]['role'] == "user":                                                                                              
-            continue                                                                                                                            
-        else:                                                                                                                                   
-            break  # Stop if we encounter an assistant message that is not a dot                                                                
-                                                                                                                                                
-    # If there are less than 2 preceding dot messages, return the original messages                                                             
-    if dotCount < 3:                                                                                                                            
-        return themessages                                                                                                                      
-                                                                                                                                                
-    # Gather the first and most recent user messages                                                                                            
-    firstUserMessageIndex = next((i for i, msg in enumerate(cleanedMessages) if msg['role'] == "user"), None)                                   
-    lastUserMessageIndex = next((i for i, msg in reversed(list(enumerate(cleanedMessages))) if msg['role'] == "user"), None)                    
-                                                                                                                                                
-    # Create a set of indices to keep                                                                                                           
-    indicesToKeep = set()                                                                                                                       
-    if firstUserMessageIndex is not None:                                                                                                       
-        indicesToKeep.add(firstUserMessageIndex)                                                                                                
-    if lastUserMessageIndex is not None:                                                                                                        
-        indicesToKeep.add(lastUserMessageIndex)                                                                                                 
-                                                                                                                                                
-    # Keep the first and last dot messages                                                                                                      
-    indicesToKeep.add(dotIndices[-1])  # First dot message in the series                                                                        
-    indicesToKeep.add(dotIndices[0])   # Last dot message in the series                                                                         
-                                                                                                                                                
-    # Create the final list of cleaned messages                                                                                                 
-    finalMessages = []                                                                                                                          
-    ignoredMessages = []                                                                                                                        
-    for i, msg in enumerate(cleanedMessages):                                                                                                   
-        if i in indicesToKeep:                                                                                                                  
-            finalMessages.append(msg)                                                                                                           
-        else:                                                                                                                                   
-            ignoredMessages.append(msg)                                                                                                         
-                                                                                                                                                
-    # Debug output for ignored messages                                                                                                         
-    print("Ignored Messages:")                                                                                                                  
-    for msg in ignoredMessages:                                                                                                                 
-        print(msg)                                                                                                                              
-                                                                                                                                                
-    return finalMessages   
+        # Check if last assistant message is just a dot
+        if cleanedMessages[lastAssistantIndex]['content'].strip() == ".":
+            # Remove all messages after the last dot message
+            cleanedMessages = cleanedMessages[:lastAssistantIndex]
+                                               
+    except Exception as e:
+        logging.error(f"Error in cleanDotMessages: {str(e)}")
+        return themessages  # Return original messages if any error occurs
+        
+    return cleanedMessages
 
 
 
-def sendRequest(no_std_out=False):
+def sendRequest(no_std_out=False): #hunt
+    """Get a single character from standard input, handling special keys and interrupts."""
+    global messages
+    global assistantt  # Add global declaration
 
-    init_assistantt()  # Initialize our aisuite client instead
+    try:
+        init_assistantt()  # Initialize our aisuite client
+    except Exception as e:
+        logging.error(f"Failed to initialize assistantt: {e}")
+        return None
 
     #url = 'https://api.openai.com/v1/chat/completions'
 
@@ -3085,7 +3053,7 @@ def sendRequest(no_std_out=False):
 
     messages = cleanDotMessages(messages) #todo is it needed
 
-    if (not no_std_out):
+    if (not no_std_out): #NO STDOUT #hunt
         count = 0
         while (True):
             jsoncommand = ""
@@ -3692,15 +3660,24 @@ def sendRequest(no_std_out=False):
 
 
     else: #it is NOT stdout
-        #TODO: refactor this 4 lines 
-        tempmessages = messages
-        if args.model[0:2] == "o1":
-            if tempmessages[0]['role'] == "system":
-                tempmessages.pop(0)
-        if (args.max and args.max > 0):
-            tempmessages = messages[-int(args.max):]
-            args.max = args.max + 1
-        return printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream), True)
+        try:
+            #TODO: refactor this 4 lines 
+            tempmessages = messages
+            if args.model[0:2] == "o1":
+                if tempmessages[0]['role'] == "system":
+                    tempmessages.pop(0)
+            if (args.max and args.max > 0):
+                tempmessages = messages[-int(args.max):]
+                args.max = args.max + 1
+
+            if assistantt is None:
+                logging.error("assistantt is not initialized")
+                return None
+
+            return printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream), True)
+        except Exception as e:
+            logging.error(f"Error in sendRequest: {e}")
+            return None
 
 def clear_terminal():
     print("\033[2J\033[1;1H")  # Clear screen
@@ -4025,7 +4002,7 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
         
-def main():
+def main(): #hunt
     global args, force_tools_flag, colon_command_modules, current_conversation_title, currFileName  # Add all globals here
     args = parser.parse_args()
     loadColonStrings()
@@ -5053,9 +5030,13 @@ def main():
 
             if myinput.strip().startswith(":scribe"):
                 #check for interrupt_thread is alive or existing
-                if interrupt_thread.is_alive():
-                    killThread = True
-                    interrupt_thread.join()
+                try:
+                    if interrupt_thread.is_alive():
+                        killThread = True
+                        interrupt_thread.join()
+                except:
+                    pass
+
                     
                 # Start the interrupt checking thread
                 #interrupt_thread = threading.Thread(target=check_for_interrupt, daemon=True)
@@ -5292,7 +5273,7 @@ def main():
                 else:
                     print("\nModel changed from "+args.model+" to: " + model_name + "\n")
                     args.model = model_name
-                    init_assistantt(args.model)  # Assuming this function initializes the assistant with the new model
+                    init_assistantt(args.model) # Assuming this function initializes the assistant with the new model
                 myinput = ""
                 continue
             elif (len(myinput) >= 2 and myinput[:2] == ":m"):
@@ -6130,7 +6111,7 @@ def main():
                 if response_model:
                     # Switch to the response model
                     args.model = response_model
-                    init_assistantt()
+                    init_assistantt() 
                 if return_model:
                     # later Switch to the return model
                     args.model = return_model
@@ -6187,7 +6168,7 @@ def main():
                     #is args.codeoutputfile set?
                     if args.outputcodefile is not None:
                         completion, ignore = sendRequest(True) #THIS IS WHERE WE CALL THE API, messages is global, and this also prints the response, IIRC
-                        #anus
+                        #hunt
                         try:
                             if isinstance(completion, list):
                                 completion = completion[0]
@@ -6253,6 +6234,7 @@ def main():
                     stack = traceback.format_exc()
                     print(stack)
                     #we need here to reestablish the connection
+                    traceback.print_exc()
 
                     #AI commenting the below ~10 lines may fix the 'stack trace in the messages array' bug
                     #check if latest message is a user message and if so, append stack trace to it or if not, append it to a new user message
