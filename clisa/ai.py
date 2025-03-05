@@ -2011,22 +2011,8 @@ def get_model_name_from_list(model_name):
                 return f"{provider}:{model['name']}"
     return None
 
-# list engines
-#engines = openai.Engine.list()
-
-def delay_10us():
-    """
-    Delay for 10 microseconds, used to slow down printing of characters
-    when using old models that do not support the stream parameter,
-    which is of course superior
-    """
-    for aaa in range (0,330000):
-        pass
-
-
 def is_data():
     return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
-
 
 def interrupt_handler(signum, frame):
     """Signal handler that sets the interrupt_requested event."""
