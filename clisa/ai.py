@@ -2547,6 +2547,9 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
                 tool_calls = []  # List to store all tool calls
                 for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
+                    if chunk == 3: #sometimes aisuite doens't return a tuple (normally which has a 2nd element '3' and I don't know why that is), so this handles that '3' that sometimes crops up as a non-tuple, such as, when NOT streaming a response
+                        continue
+
                     message_type = None #TODO investigate why SOMETIMES chunk is not a tuple, because this was being revealed before this line was placed here 
                     commandflag = False
                     if isinstance(chunk, tuple):
