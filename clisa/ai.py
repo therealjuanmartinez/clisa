@@ -2311,6 +2311,7 @@ def outputConversationToFile(file=None, unprocessedUserMessage=None, print_file_
             "role": "user",
             "content": unprocessedUserMessage
         })
+    messagesCopy = cleanMessages(messagesCopy)
     if not os.path.exists(conversationDirectory):
         os.mkdir(conversationDirectory)
 
@@ -2553,7 +2554,7 @@ def printAiContent(content, noprint=False, noJsonCheck=False):
                 tool_calls = []  # List to store all tool calls
                 for chunk in content:   #aisuite here, this shoudl be an iterator from aisuite
 
-                    if chunk == 3: #sometimes aisuite doens't return a tuple (normally which has a 2nd element '3' and I don't know why that is), so this handles that '3' that sometimes crops up as a non-tuple, such as, when NOT streaming a response
+                    if chunk == 3 or chunk == 4: #sometimes aisuite doens't return a tuple (normally which has a 2nd element '3' and I don't know why that is), so this handles that '3' that sometimes crops up as a non-tuple, such as, when NOT streaming a response
                         continue
 
                     message_type = None #TODO investigate why SOMETIMES chunk is not a tuple, because this was being revealed before this line was placed here 
@@ -2991,7 +2992,13 @@ def cleanDotMessages(themessages):
         
     return cleanedMessages
 
-
+def cleanMessages(messages_list):
+    """Ensure no empty messages exist in the messages array"""
+    for msg in messages_list:
+        #if empty or whitespace, remove it
+        if msg.get('content', '').strip() == '':
+            messages_list.remove(msg)
+    return messages_list
 
 def sendRequest(no_std_out=False): #hunt
     """Get a single character from standard input, handling special keys and interrupts."""
@@ -3008,8 +3015,7 @@ def sendRequest(no_std_out=False): #hunt
 
     #from clisa.base.tool_base import ToolBase
 
-    global messages
-    global finalMessages
+    tempmessages = cleanMessages(messages)
 
     #check first message that is either user or assistant. If it's assistant, we need to insert an empty user message
     #above it 
@@ -3669,6 +3675,7 @@ def sendRequest(no_std_out=False): #hunt
                 logging.error("assistantt is not initialized")
                 return None
 
+            tempmessages = cleanMessages(tempmessages)
             return printAiContent(assistantt.complete_chat(tempmessages, {}, args.stream), True)
         except Exception as e:
             logging.error(f"Error in sendRequest: {e}")
@@ -6239,6 +6246,8 @@ def main(): #hunt
                         #        "role": "user",
                         #        "content": stack
                         #    })
+
+                        messages = cleanMessages(messages)
 
                         global assistantt
                         #global config
