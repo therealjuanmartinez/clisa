@@ -157,6 +157,7 @@ commands = [
     {"command": ":hint", "description": "with role loaded, you can use this command followed by text for your hint to append to that role",},
     {"command": ":scribe", "description": "Connect/reconnect to the transcription server, making this instance the sole consumer of the REC+SEND button in the Android app",},
     {"command": ":getconfig", "description": "Connect to user-specified URL to get config package (connects to [URL]/download and sends a password via POST such that it can be retrieved by the server as request.json.get('password') and the server should respond with a send_file(package.tar, as_attachment=True) - As of this time the server component is not published"},
+    {"command": ":configpath", "description": "print the path to the config.json file"},
     {"command": ":clearkeys", "description": "Clear all API keys in config"},
     {"command": "image=", "description": "Deprecated? Uses image filename for vision prompt"},
     {"command": "images=", "description": "specify # of images along with prompt, will pull latest file(s) from /dev/shm/"},
@@ -2093,6 +2094,8 @@ def check_for_interrupt(force=False, scribe_config=None):
 
         # Send the length followed by the metadata
         sock.sendall(packed_length + metadata_bytes)
+
+        global killThread
 
         while True and killThread == False:
             # Use select to wait for incoming messages
@@ -5044,6 +5047,8 @@ def main(): #hunt
                     #start interrupt thread where we force it to connect to transcription service
                     #by passing True to the force value that is accepted by the ccheck_for_interrupt function
 
+                    killThread = False
+
                     scribe_config = get_transcription_config()
                     interrupt_thread = threading.Thread(target=check_for_interrupt, args=(True, scribe_config), daemon=True)
                     interrupt_thread.start()
@@ -5604,6 +5609,11 @@ def main(): #hunt
                 if myinput.strip() == ":noonlytools":
                     print("No only tools\n")
                     force_tools_flag = False
+                    myinput = ""
+                    continue
+
+                if myinput.strip() == ":configpath":
+                    print(f"Config path: {BASE_DIR/'config'}\n")
                     myinput = ""
                     continue
 
