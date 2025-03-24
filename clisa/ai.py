@@ -5613,7 +5613,8 @@ def main(): #hunt
                     continue
 
                 if myinput.strip() == ":configpath":
-                    print(f"Config path: {BASE_DIR/'config'}\n")
+                    config_path = os.path.join(BASE_DIR, 'config.json')
+                    print(f"Config path: {config_path}\n")
                     myinput = ""
                     continue
 
