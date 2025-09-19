@@ -16,6 +16,9 @@ THIS DOCUMENTATION IS AI GENERATED ONLY FROM AI.PY AND IS NOT IN ANY WAY COMPLET
 - **Custom Commands**: Includes several custom commands (e.g., changing models, setting parameters) which can be triggered via specific command-line inputs.
 - **Error Handling**: Basic error handling for requests, with retries and error logging.
 
+## Easy Install
+`pip install git+https://github.com/therealjuanmartinez/clisa.git`
+
 ## Usage
 
 1. **Installation and Setup**:
